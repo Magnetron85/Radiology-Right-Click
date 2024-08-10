@@ -12,18 +12,19 @@ The script can be paused to see the default right click menu for a specified tim
 Created by an amateur programming enthusiast with a passion for radiology, in partnership with Claude, an AI assistant.
 
 ## Features
-- Calcium Score Percentile Calculator (MESA and Hoff methods)
+- Coronary Artery Calcium Score Percentile Calculator (MESA and Hoff methods)
 - Ellipsoid Volume Calculator
+- Bullet Volume Calculator
 - PSA Density Calculator
 - Pregnancy Date Calculator
 - Menstrual Phase Estimator
 - Adrenal Washout Calculator
 - Thymus Chemical Shift Calculator
-- Hepatic Steatosis Estimator
-- MRI Liver Iron Content Estimator
+- Hepatic Steatosis Estimator (based on Serlin. Radiology. 2009-IP/OP. Not more accurate PDFF which would use "statistics" function to compute averages)
+- MRI Liver Iron Content Estimator (need R2* dataset)
 - Nodule Size Comparison and Sorting (Sorting takes in 3 comma separated numbers and returns in descending order separated by x to improve formatting of ModLink fields containing 3 comma separated values).
 - Number statistics
-- Number formatting correction 
+- Measurement formatting correction 
 
 
 ## Installation
@@ -200,4 +201,4 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ## Disclaimer
-This software is provided for educational and research purposes only. It should not be used as a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Users should exercise caution and verify all calculations, especially those related to radiation dosage and patient safety. While the RADS modules aim to assist in classification and reporting, the final interpretation and clinical decisions should always be made by qualified healthcare professionals. Users should be aware that translations and localizations may not be officially certified for medical use in all jurisdictions. The automated measurement capture and note parsing features are designed to assist radiologists but should not replace careful review and validation of all information in the final report. Radiologists are responsible for ensuring the accuracy and appropriateness of all auto-populated content. It is the responsibility of the user if this software, not the software or developer, to ensure accurate calculations.
+This software is provided for educational and research purposes only. It should not be used as a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Users should exercise caution and verify all calculations for patient safety. While the RADS modules aim to assist in classification and reporting, the final interpretation and clinical decisions should always be made by qualified healthcare professionals. The automated measurement capture and note parsing features are designed to assist radiologists but should not replace careful review and validation of all information in the final report. Users are responsible for ensuring the accuracy and appropriateness of all auto-populated content. It is the responsibility of the user of this software, not the software or developer, to ensure accurate calculations.
