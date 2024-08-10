@@ -26,6 +26,10 @@ Created by an amateur programming enthusiast with a passion for radiology, in pa
 - Number formatting correction 
 
 
+## Installation
+1. Install AutoHotkey v1.1
+2. Download the script file
+3. Run the script
 
 ## Usage
 
@@ -52,13 +56,22 @@ This project is currently in testing and development. We are aware of several ar
 
 
 
-## Sample Inputs
+## Sample Inputs (Highlight this text in NotePad or PowerScribe, right click while highlighted). 
 
 ### Calcium Score Percentile
 ```
 Age: 56
 Sex: Male
 Race: White (this is optional and leads to an external HTTP call for MESA numbers)
+
+
+YOUR CORONARY ARTERY CALCIUM SCORE: 56 (Agatston)
+```
+OR
+```
+Age: 56
+Sex: Male
+
 
 YOUR CORONARY ARTERY CALCIUM SCORE: 56 (Agatston)
 ```
@@ -67,6 +80,13 @@ YOUR CORONARY ARTERY CALCIUM SCORE: 56 (Agatston)
 ```
 3.5 x 2.6 x 4.1 cm
 ```
+OR
+```
+4 x 3 x 4 mm
+```
+OR
+3.5 x 2.6 x 4.1 (assumes cm with decimals, assumes mm with whole numbers)
+
 
 ### PSA Density
 ```
@@ -77,13 +97,17 @@ PSA level: 4.5 ng/mL, Prostate volume: 30 cc
 ```
 LMP: 01/15/2023
 ```
-or
+OR
 ```
 GA: 12 weeks and 3 days as of today
 ```
 OR
 ```
 GA: 12 weeks and 3 days as of 01/01/2021
+```
+OR
+```
+Gestational Age: 12w3d (if no date, assumes todays date)
 ```
 
 ### Menstrual Phase
@@ -95,21 +119,33 @@ LMP: 05/01/2023
 ```
 Unenhanced: 10 HU, Enhanced: 80 HU, Delayed: 40 HU
 ```
+OR
+```
+Enhanced: 80 HU, Delayed: 40 HU
+```
+
 
 ### Thymus Chemical Shift
 ```
 Thymus IP: 100, OP: 80, Paraspinous IP: 90, OP: 85
 ```
 
+
 ### Hepatic Steatosis
 ```
 Liver IP: 100, OP: 80, Spleen IP: 90, OP: 88
 ```
+OR
+```
+Liver IP: 100, OP: 80
+```
+
 
 ### MRI Liver Iron Content
 ```
 1.5T, R2*: 50 Hz
 ```
+
 
 ### Nodule Size Comparison (takes in 1, 2 or 3 measurements)
 ```
@@ -117,6 +153,10 @@ previous 3.5 x 2.6 cm  now 4.1 x 2.9 cm
 OR 
 ```
 4.1 x 2.9 x 3.3 cm (previously 3.9 x 2.8 x 3.0 cm)
+```
+OR
+```
+4.1 cm, previously 3.9 cm
 ```
 
 ### Sort measurement sizes (takes in 2 or 3 measurements)
@@ -139,10 +179,6 @@ OR
 Returns various statistics meaningful to daily practice. More statistics are returned for larger datasets.
 
 
-## Installation
-1. Install AutoHotkey v1.1
-2. Download the script file
-3. Run the script
 
 ## Contributions
 Contributions, suggestions, and bug reports are welcome. Please open an issue or submit a pull request on GitHub. We're particularly interested in contributions that address our planned future improvements or add new calculation packages for various radiology subspecialties, including nuclear medicine. We also welcome innovative solutions for implementing advanced text processing capabilities within the constraints of hospital security protocols, including spelling and grammar checking, dictation error detection, and medical abbreviation expansion. Contributions to the development of RADS modules and decision support algorithms are highly encouraged. We are also seeking contributors for translations and localization to expand the tool's accessibility to non-English speaking radiologists. Expertise in PACS integration, EHR systems, automated data capture, and natural language processing would be especially valuable for implementing the automated measurement capture and note parsing systems.
