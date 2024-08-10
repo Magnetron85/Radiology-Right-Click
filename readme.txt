@@ -5,7 +5,7 @@ Radiology Right Click v1.0 is a radiologist's best friend, designed to improve q
 
 It works by highlighting text in PowerScribe360 as installed at the authors institution or NotePad for troubleshooting.
 
-The user highlights text and right clicks with the mouse. A new right click menu appears with various useful functions. 
+The user highlights text and right clicks with the mouse. A new right click menu appears in PowerScribe or NotePad with various useful functions. 
 The script can be paused to see the default right click menu for a specified time - 3 minutes default and up to 10 hours to turn off for an entire shift. 
 
 Users can hide calculators that are infrequently or not used. Preferences are saved in a preferences.ini which is created in the script directory if preferences are edited.
@@ -46,8 +46,9 @@ Created by an amateur programming enthusiast with a passion for radiology, in pa
 6) Functions return results in message boxes with output pasted to your clipboard. Input format is (usually) preserved to allow you to directly paste into reports with minimal editing.
 7) To turn off the script, click "Show Hidden Icons" on Windows taskbar (^ carrot), Find the Green letter H indicating an AutoHotKey script is running, right click on the script and select "exit"
 
-Troubleshooting: Ensure you are only running one instance of the script if there is unexpected behavior by going to the "Show Hidden Icons" in the Windows Task Bar and making sure only 1 green letter H is present. Exit duplicate instances as needed.
-
+Troubleshooting: 
+1) Ensure you are only running one instance of the script if there is unexpected behavior by going to the "Show Hidden Icons" in the Windows Task Bar and making sure only 1 green letter H is present. Exit duplicate instances as needed.
+2) Ensure your running instance of powerscribe has the same name as one of the options on line #92 in code. If you would like another program to have access, add it to that line.
 
 
 
