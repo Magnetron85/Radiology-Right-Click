@@ -67,17 +67,13 @@ This project is currently in testing and development. We are aware of several ar
 ```
 Age: 56
 Sex: Male
-Race: White (this is optional and leads to an external HTTP call for MESA numbers)
-
-
+Race: White
 YOUR CORONARY ARTERY CALCIUM SCORE: 56 (Agatston)
 ```
 OR
 ```
 Age: 56
 Sex: Male
-
-
 YOUR CORONARY ARTERY CALCIUM SCORE: 56 (Agatston)
 ```
 
