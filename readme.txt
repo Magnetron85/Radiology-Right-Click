@@ -39,7 +39,7 @@ Created by an amateur programming enthusiast with a passion for radiology, in pa
 2b) Optional: Plug usb stick into PACS work station
 3) Start the script by double clicking the exe file.
 4) Highlight text to process in PowerScribe (or NotePad in test environment) 
-5) Right-click on mouse, selected calculation menu choice.
+5) Right-click on mouse, select a menu choice to run function.
 6) To turn off the script, click "Show Hidden Icons" on Windows taskbar (^ carrot), Find the Green letter H indicating an AutoHotKey script is running, right click on the script and select "exit"
 
 Troubleshooting: Ensure you are only running one instance of the script if there is unexpected behavior by going to the "Show Hidden Icons" in the Windows Task Bar and making sure only 1 green letter H is present. Exit duplicate instances as needed.
