@@ -8,6 +8,8 @@ It works by highlighting text in PowerScribe360 as installed at the authors inst
 The user highlights text and right clicks with the mouse. A new right click menu appears with various useful functions. 
 The script can be paused to see the default right click menu for a specified time - 3 minutes default and up to 10 hours to turn off for an entire shift. 
 
+Users can hide calculators that are infrequently or not used. Preferences are saved in a preferences.ini which is created in the script directory if preferences are edited.
+
 ## Author
 Created by an amateur programming enthusiast with a passion for radiology, in partnership with Claude, an AI assistant.
 
