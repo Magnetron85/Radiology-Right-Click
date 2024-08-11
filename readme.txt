@@ -64,6 +64,7 @@ This project is currently in testing and development. We are aware of several ar
 ## Sample Inputs (Highlight this text in NotePad or PowerScribe, right click while highlighted). 
 
 ### Calcium Score Percentile
+Description: calculates  age and sex matched coronary artery calcifiction percentile (Hoff dataset). Also takes into account race if provided (MESA dataset; races supported based on MESA: Black, Chinese, Hispanic and White). The MESA data set currently requires an external call to their website to obtain the percentile information. The function also calculates arterial age.
 ```
 Age: 56
 Sex: Male
@@ -86,8 +87,9 @@ OR
 4 x 3 x 4 mm
 ```
 OR
+```
 3.5 x 2.6 x 4.1 (assumes cm with decimals, assumes mm with whole numbers)
-
+```
 
 ### PSA Density
 ```
@@ -95,6 +97,7 @@ PSA level: 4.5 ng/mL, Prostate volume: 30 cc
 ```
 
 ### Pregnancy Dates
+Description: calculates LMP, current gestational age, and expected delivery date based on various inputs
 ```
 LMP: 01/15/2023
 ```
@@ -112,11 +115,14 @@ Gestational Age: 12w3d (if no date, assumes todays date)
 ```
 
 ### Menstrual Phase
+Description: calculates the current date of menstrual cycle based on a 28 day cycle. Provides expected stripe thickness (there is considerable variability in stripe thickness, and this is general information.).
+
 ```
 LMP: 05/01/2023
 ```
 
 ### Adrenal Washout
+Description: calculates absolute and relative washout. Takes into account, intrinsic density and provides useful recommendations based on Hounsfield unit less than 10 or greater than 43.
 ```
 Unenhanced: 10 HU, Enhanced: 80 HU, Delayed: 40 HU
 ```
@@ -127,12 +133,14 @@ Enhanced: 80 HU, Delayed: 40 HU
 
 
 ### Thymus Chemical Shift
+Description: Calculates thymic chemical shift ratio. Cut off set to 0.849 according to reference attached. 
 ```
 Thymus IP: 100, OP: 80, Paraspinous IP: 90, OP: 85
 ```
 
 
 ### Hepatic Steatosis
+Description: Gross assessment of liver fat fraction According to Claud Serlins 2009 invited commentary. Note: this is not PDFF. PDFF typically is obtained by obtaining 4 meaurements on a dedicated series and taking an average. This can be accomplished using the statistics function. 
 ```
 Liver IP: 100, OP: 80, Spleen IP: 90, OP: 88
 ```
@@ -143,14 +151,17 @@ Liver IP: 100, OP: 80
 
 
 ### MRI Liver Iron Content
+Description: A handy tool to calculate estimated mg Fe / g dry liver according to most recently known normalization functions (reference provided in output if preference is selected)
 ```
 1.5T, R2*: 50 Hz
 ```
 
 
-### Nodule Size Comparison (takes in 1, 2 or 3 measurements)
+### Nodule Size Comparison
+Description: takes in 1, 2 or 3 measurements for a single lesion and calculates change in longest dimension, area and ellipsoid volume. Absolute numbers and percent change are displayed. 
 ```
 previous 3.5 x 2.6 cm  now 4.1 x 2.9 cm
+```
 OR 
 ```
 4.1 x 2.9 x 3.3 cm (previously 3.9 x 2.8 x 3.0 cm)
@@ -160,7 +171,8 @@ OR
 4.1 cm, previously 3.9 cm
 ```
 
-### Sort measurement sizes (takes in 2 or 3 measurements)
+### Sort measurement sizes 
+Descriptions: Takes in 2 or 3 numbers, sorts into descending order and separates by an "x" The function works for any number of inputs- ie a paragraph with 3 separate lesions will be treated independently and sorted appropriately. 
 ```
 3.5 x 2.6 x 4.2 cm -->  4.2 x 3.5 x 2.6 cm 
 ```
@@ -168,12 +180,15 @@ OR
 ```
 (3,4,7) --> 7 x 4 x 3
 
-### Calculate number range (takes in any number of digits)
+### Calculate number range 
+Description: Takes in any number of digits with any seperator and outputs the smallest number and largest number separated by a "-"
 ```
-3,12,5 --> 3 - 12
+3,12,5
 ```
 OR
-3.5 4.2 5.5 --> 3.5 - 5.5
+```
+3.5 4.2 5.5
+```
 
 ### Calculate statistics (takes in any number of digits)
 ```
