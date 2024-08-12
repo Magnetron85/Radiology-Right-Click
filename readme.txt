@@ -1,7 +1,7 @@
-# Radiology Right Click v1.0
+# Radiology Right Click v1.01
 
 ## Description
-Radiology Right Click v1.0 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments.
+Radiology Right Click v1.01 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments.
 
 It works by highlighting text in PowerScribe360 as installed at the authors institution or NotePad for troubleshooting.
 
