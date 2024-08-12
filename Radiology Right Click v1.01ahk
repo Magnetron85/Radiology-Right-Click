@@ -1,7 +1,7 @@
 ; ==========================================
 ; Radiologist's Helper Script
 ; Radiology Right Click
-; Version: 1.0
+; Version: 1.01
 ; Description: This AutoHotkey script provides various calculation tools and utilities
 ;              for radiologists, including volume calculations, date estimations,
 ;              and statistical analysis of measurements.
@@ -30,7 +30,11 @@ global PauseDuration := 180000
 global DarkMode := false
 global ShowCalciumScorePercentile := true
 global ShowCitations := true
-global ShowArterialAge :=true
+global ShowArterialAge :=
+global g_SelectedText := ""
+global PauseDurationChoice
+global TargetApps := ["ahk_class Notepad", "ahk_exe notepad.exe", "ahk_class PowerScribe", "ahk_exe PowerScribe.exe", "ahk_class PowerScribe360", "ahk_exe Nuance.PowerScribe360.exe", "ahk_class PowerScribe | Reporting"]
+
 
 ; Load preferences (keep this function at the top)
 LoadPreferencesFromFile() {
@@ -89,10 +93,24 @@ LoadPreferencesFromFile()
 ; ==========================================
 
 ; Set up context menu for target applications
-#If WinActive("ahk_class Notepad") or WinActive("ahk_exe notepad.exe") or WinActive("ahk_class PowerScribe") or WinActive("ahk_exe PowerScribe.exe") or WinActive("ahk_class PowerScribe360") or WinActive("ahk_exe Nuance.PowerScribe360.exe") or WinActive("ahk_class PowerScribe | Reporting")
-*RButton::
+#If IsTargetApp()
+RButton::
 {
-    SelectedText := GetSelectedText()
+    ; Get information about the window under the cursor
+    MouseGetPos, , , windowUnderCursor
+    
+    ; Activate the window if it's not already active
+    if (windowUnderCursor != WinActive("A")) {
+        WinActivate, ahk_id %windowUnderCursor%
+    }
+    
+    ; Small delay to ensure window activation and to allow for text selection
+    Sleep, 50
+
+    ; Get selected text
+    g_SelectedText := GetSelectedText()
+
+    ; Show our custom menu
     CreateCustomMenu()
     Menu, CustomMenu, Show
     Menu, CustomMenu, DeleteAll
@@ -100,22 +118,40 @@ LoadPreferencesFromFile()
 }
 #If
 
+; Function to check if the current window is a target application
+IsTargetApp() {
+    MouseGetPos, , , windowUnderCursor
+    WinGetClass, windowClass, ahk_id %windowUnderCursor%
+    WinGet, windowExe, ProcessName, ahk_id %windowUnderCursor%
+    
+    for index, app in TargetApps {
+        if (windowClass == StrReplace(app, "ahk_class ", "") || windowExe == StrReplace(app, "ahk_exe ", "")) {
+            return true
+        }
+    }
+    return false
+}
+
+; Function to create the custom right-click menu
 CreateCustomMenu() {
     global ShowEllipsoidVolume, ShowBulletVolume, ShowPSADensity, ShowPregnancyDates, ShowMenstrualPhase
     global ShowAdrenalWashout, ShowThymusChemicalShift, ShowHepaticSteatosis
     global ShowMRILiverIron, ShowStatistics, ShowNumberRange
 
+    ; Add standard editing options
     Menu, CustomMenu, Add, Cut, MenuCut
     Menu, CustomMenu, Add, Copy, MenuCopy
     Menu, CustomMenu, Add, Paste, MenuPaste
     Menu, CustomMenu, Add, Delete, MenuDelete
     Menu, CustomMenu, Add
+
+    ; Add custom calculation options
     Menu, CustomMenu, Add, Compare Measurement Sizes, CompareNoduleSizes
     Menu, CustomMenu, Add, Sort Measurement Sizes, SortNoduleSizes
 	
-	if (ShowCalciumScorePercentile) {
-		Menu, CustomMenu, Add, Calculate Calcium Score Percentile, CalculateCalciumScorePercentile
-	}
+    if (ShowCalciumScorePercentile) {
+        Menu, CustomMenu, Add, Calculate Calcium Score Percentile, CalculateCalciumScorePercentile
+    }
     if (ShowEllipsoidVolume) {
         Menu, CustomMenu, Add, Calculate Ellipsoid Volume, CalculateEllipsoidVolume
     }
@@ -154,6 +190,7 @@ CreateCustomMenu() {
     Menu, CustomMenu, Add, Preferences, ShowPreferences
 }
 
+; Standard editing functions
 MenuCut:
     Send, ^x
 return
@@ -170,11 +207,87 @@ MenuDelete:
     Send, {Delete}
 return
 
+; Custom calculation functions
+; Each function now uses g_SelectedText instead of SelectedText
+
 CalculateCalciumScorePercentile:
-    Result := CalculateCalciumScorePercentile(SelectedText)
+    Result := CalculateCalciumScorePercentile(g_SelectedText)
     ShowResult(Result)
 return
 
+CalculateEllipsoidVolume:
+    Result := CalculateEllipsoidVolume(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateBulletVolume:
+    Result := CalculateBulletVolume(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculatePSADensity:
+    Result := CalculatePSADensity(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculatePregnancyDates:
+    Result := CalculatePregnancyDates(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateMenstrualPhase:
+    Result := CalculateMenstrualPhase(g_SelectedText)
+    ShowResult(Result)
+return
+
+SortNoduleSizes:
+    ProcessedText := ProcessAllNoduleSizes(g_SelectedText)
+    if (ProcessedText != g_SelectedText)
+    {
+        ; Preserve leading and trailing spaces only if they existed in the original input
+        leadingSpace := (SubStr(g_SelectedText, 1, 1) == " ") ? " " : ""
+        trailingSpace := (SubStr(g_SelectedText, 0) == " ") ? " " : ""
+        Clipboard := leadingSpace . Trim(ProcessedText) . trailingSpace
+        Send, ^v
+    }
+return
+
+Statistics:
+    Result := CalculateStatistics(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateIronContent:
+    Result := EstimateIronContent(g_SelectedText)
+    ShowResult(Result)
+return
+
+Range:
+    Result := CalculateRange(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateAdrenalWashout:
+    Result := CalculateAdrenalWashout(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateThymusChemicalShift:
+    Result := CalculateThymusChemicalShift(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateHepaticSteatosis:
+    Result := CalculateHepaticSteatosis(g_SelectedText)
+    ShowResult(Result)
+return
+
+CompareNoduleSizes:
+    Result := CompareNoduleSizes(g_SelectedText)
+    ShowResult(Result)
+return
+
+; Function to get selected text (unchanged)
 GetSelectedText() {
     OldClipboard := ClipboardAll
     Clipboard := ""
@@ -190,49 +303,13 @@ GetSelectedText() {
     return SelectedText
 }
 
+; Function to show results (unchanged)
 ShowResult(Result) {
     global DarkMode
     options := DarkMode ? 0x1000000 : 0  ; 0x1000000 is for dark mode
     MsgBox, % options, Result, %Result%
     Clipboard := Result
 }
-
-CalculateEllipsoidVolume:
-    Result := CalculateEllipsoidVolume(SelectedText)
-    ShowResult(Result)
-return
-
-CalculateBulletVolume:
-    Result := CalculateBulletVolume(SelectedText)
-    ShowResult(Result)
-return
-
-CalculatePSADensity:
-    Result := CalculatePSADensity(SelectedText)
-    ShowResult(Result)
-return
-
-CalculatePregnancyDates:
-    Result := CalculatePregnancyDates(SelectedText)
-    ShowResult(Result)
-return
-
-CalculateMenstrualPhase:
-    Result := CalculateMenstrualPhase(SelectedText)
-    ShowResult(Result)
-return
-
-SortNoduleSizes:
-    ProcessedText := ProcessAllNoduleSizes(SelectedText)
-    if (ProcessedText != SelectedText)
-    {
-        ; Preserve leading and trailing spaces only if they existed in the original input
-        leadingSpace := (SubStr(SelectedText, 1, 1) == " ") ? " " : ""
-        trailingSpace := (SubStr(SelectedText, 0) == " ") ? " " : ""
-        Clipboard := leadingSpace . Trim(ProcessedText) . trailingSpace
-        Send, ^v
-    }
-return
 
 CalculateEllipsoidVolume(input) {
     RegExNeedle := "\s*(\d+(?:\.\d+)?)\s*[x,]\s*(\d+(?:\.\d+)?)\s*[x,]\s*(\d+(?:\.\d+)?)\s*"
@@ -416,10 +493,7 @@ ProcessNoduleSizes(a, b, c := "") {
     }
 }
 
-Statistics:
-    Result := CalculateStatistics(SelectedText)
-    ShowResult(Result)
-return
+
 
 CalculateStatistics(input) {
     numbers := ExtractNumbers(input)
@@ -534,10 +608,7 @@ CalculateStandardDeviation(numbers) {
     return Round(Sqrt(variance), 2)
 }
 
-CalculateIronContent:
-    Result := EstimateIronContent(SelectedText)
-    ShowResult(Result)
-return
+
 
 EstimateIronContent(input) {
 	global ShowCitations
@@ -575,10 +646,7 @@ EstimateIronContent(input) {
     return result
 }
 
-Range:
-    Result := CalculateRange(SelectedText)
-    ShowResult(Result)
-return
+
 
 CalculateRange(input) {
     numbers := []
@@ -606,10 +674,7 @@ CalculateRange(input) {
     return result
 }
 
-CalculateAdrenalWashout:
-    Result := CalculateAdrenalWashout(SelectedText)
-    ShowResult(Result)
-return
+
 
 CalculateAdrenalWashout(input) {
 	global ShowCitations
@@ -719,10 +784,7 @@ CheckEnhancement(value, baseline) {
     return (value - baseline)
 }
 
-CalculateThymusChemicalShift:
-    Result := CalculateThymusChemicalShift(SelectedText)
-    ShowResult(Result)
-return
+
 
 CalculateThymusChemicalShift(input) {
     RegExNeedle := "i)thymus.*?((?:in[- ]?phase|IP|T1IP)).*?(\d+).*?((?:out[- ]?of[- ]?phase|OP|OOP|T1OP)).*?(\d+).*?paraspinous.*?((?:in[- ]?phase|IP|T1IP)).*?(\d+).*?((?:out[- ]?of[- ]?phase|OP|OOP|T1OP)).*?(\d+)"
@@ -765,10 +827,7 @@ InterpretThymusChemicalShift(chemicalShiftRatio) {
 }
 
 
-CalculateHepaticSteatosis:
-    Result := CalculateHepaticSteatosis(SelectedText)
-    ShowResult(Result)
-return
+
 
 CalculateHepaticSteatosis(inputText) {
     global ShowCitations
@@ -819,10 +878,6 @@ InterpretHepaticSteatosis(hepaticFatFraction) {
     }
 }
 
-CompareNoduleSizes:
-    Result := CompareNoduleSizes(SelectedText)
-    ShowResult(Result)
-return
 
 CompareNoduleSizes(input) {
     RegExNeedle := "i)(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?.*?(?:previous(?:ly)?|prior|before|old|initial).*?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?"
@@ -930,7 +985,7 @@ JoinDimensions(dimensions) {
     return Round(dimensions[1], 1) . (dimensions.Length() > 1 ? " x " . Round(dimensions[2], 1) : "") . (dimensions.Length() > 2 ? " x " . Round(dimensions[3], 1) : "")
 }
 
-global PauseDurationChoice
+
 
 ShowPreferences() {
     global DisplayUnits, DisplayAllValues, ShowEllipsoidVolume, ShowBulletVolume, ShowPSADensity, ShowPregnancyDates, ShowMenstrualPhase, PauseDuration
@@ -1556,35 +1611,9 @@ DateCalc(date, days) {
     return result
 }
 
-#If
-*RButton::
-{
-    SetTimer, CheckActiveWindowAndShowMenu, -10  ; Set a 10ms delay
-    return
-}
 
-CheckActiveWindowAndShowMenu:
-    if (IsTargetWindowActive()) {
-        SelectedText := GetSelectedText()
-        CreateCustomMenu()
-        if (IsTargetWindowActive()) {  ; Double-check before showing menu
-            Menu, CustomMenu, Show
-        }
-        Menu, CustomMenu, DeleteAll
-    } else {
-        Send {RButton}  ; Perform default right-click if not in target window
-    }
-return
 
-IsTargetWindowActive() {
-    return WinActive("ahk_class Notepad") 
-        or WinActive("ahk_exe notepad.exe") 
-        or WinActive("ahk_class PowerScribe") 
-        or WinActive("ahk_exe PowerScribe.exe") 
-        or WinActive("ahk_class PowerScribe360") 
-        or WinActive("ahk_exe Nuance.PowerScribe360.exe") 
-        or WinActive("ahk_class PowerScribe | Reporting")
-}
+
 
 ^!p::ShowPreferences()
 
