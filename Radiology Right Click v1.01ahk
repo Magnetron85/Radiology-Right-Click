@@ -1,7 +1,7 @@
 ; ==========================================
 ; Radiologist's Helper Script
 ; Radiology Right Click
-; Version: 1.01
+; Version: 1.0
 ; Description: This AutoHotkey script provides various calculation tools and utilities
 ;              for radiologists, including volume calculations, date estimations,
 ;              and statistical analysis of measurements.
@@ -880,75 +880,156 @@ InterpretHepaticSteatosis(hepaticFatFraction) {
 
 
 CompareNoduleSizes(input) {
-    RegExNeedle := "i)(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?.*?(?:previous(?:ly)?|prior|before|old|initial).*?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?"
+    static RegExNeedle := "i)(?:(\d{1,2}/\d{1,2}/\d{2,4})[:.]?\s*)?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?.*?(?:previous(?:ly)?|prior|before|old|initial).*?(?:(\d{1,2}/\d{1,2}/\d{2,4})[:.]?\s*)?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?(?:\s*(?:on|dated?)\s*(\d{1,2}/\d{1,2}/\d{2,4}))?"
+    
     if (!RegExMatch(input, RegExNeedle, match)) {
-        RegExNeedle := "i)(?:previous(?:ly)?|prior|before|old|initial).*?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?.*?(?:now|current(?:ly)?|present|new|recent(?:ly)?|follow[- ]?up).*?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?"
+        RegExNeedle := "i)(?:previous(?:ly)?|prior|before|old|initial).*?(?:(\d{1,2}/\d{1,2}/\d{2,4})[:.]?\s*)?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?(?:\s*(?:on|dated?)\s*(\d{1,2}/\d{1,2}/\d{2,4}))?.*?(?:now|current(?:ly)?|present|new|recent(?:ly)?|follow[- ]?up).*?(?:(\d{1,2}/\d{1,2}/\d{2,4})[:.]?\s*)?(\d+(?:\.\d+)?(?:\s*(?:x|\*)\s*\d+(?:\.\d+)?){0,2})\s*(cm|mm)?"
         if (!RegExMatch(input, RegExNeedle, match)) {
             return "Invalid input format. Please provide both current and previous measurements."
         }
-        current := match3 . " " . match4
-        previous := match1 . " " . match2
+        current := match6 . " " . match7, previous := match2 . " " . match3
+        currentDate := match5, previousDate := match1 ? match1 : match4
     } else {
-        current := match1 . " " . match2
-        previous := match3 . " " . match4
+        current := match2 . " " . match3, previous := match5 . " " . match6
+        currentDate := match1, previousDate := match4 ? match4 : match7
     }
-    return CompareMeasurements(previous, current, input)
+    
+    return CompareMeasurements(previous, current, previousDate, currentDate, input)
 }
 
-CompareMeasurements(previous, current, input) {
+CompareMeasurements(previous, current, previousDate, currentDate, input) {
+    ; Process measurements
     prev := ProcessMeasurement(previous)
     curr := ProcessMeasurement(current)
-
-    if (prev.dimensions.Length() != curr.dimensions.Length()) {
+    
+    ; Check for dimension mismatch
+    if (prev.dimensions.MaxIndex() != curr.dimensions.MaxIndex()) {
         return "Error: Mismatch in number of dimensions between previous and current measurements.`nPrevious: " . previous . "`nCurrent: " . current
     }
 
+    ; Initialize result string
     result := input . "`n`n"
+    result .= "Previous Date: " . (previousDate ? previousDate : "Not provided") . "`n"
+    result .= "Current Date: " . (currentDate ? currentDate : "Assumed as today") . "`n`n"
+
+    ; Process dimensions
     prevLongestDim := 0
     currLongestDim := 0
-
-    Loop % prev.dimensions.Length() {
+    
+    Loop, % prev.dimensions.MaxIndex()
+    {
         prevDim := prev.dimensions[A_Index]
         currDim := curr.dimensions[A_Index]
         
-        ; Round to 1 decimal place for display if cm, keep full precision for mm
-        prevDisplayDim := (prev.unit == "cm") ? Round(prevDim, 1) : prevDim
-        currDisplayDim := (curr.unit == "cm") ? Round(currDim, 1) : currDim
-        
-        result .= "Dimension " . A_Index . ": "
-            . prevDisplayDim . " " . prev.unit . " -> "
-            . currDisplayDim . " " . curr.unit . " "
-
+        ; Convert to cm if necessary
         prevDimCm := (prev.unit == "mm") ? prevDim / 10 : prevDim
         currDimCm := (curr.unit == "mm") ? currDim / 10 : currDim
-
+        
+        ; Track longest dimension
         prevLongestDim := (prevDimCm > prevLongestDim) ? prevDimCm : prevLongestDim
         currLongestDim := (currDimCm > currLongestDim) ? currDimCm : currLongestDim
-
-        change := (currDimCm / prevDimCm * 100) - 100
-        result .= "(" . (change >= 0 ? "+" : "") . Round(change, 1) . "%)`n"
+        
+        ; Calculate change
+        change := (currDimCm / prevDimCm - 1) * 100
+        
+        ; Append to result
+        result .= "Dimension " . A_Index . ": " 
+                . Round(prevDim, 2) . " " . prev.unit 
+                . " -> " 
+                . Round(currDim, 2) . " " . curr.unit 
+                . " (" . (change >= 0 ? "+" : "") . Round(change, 1) . "%)`n"
     }
-
-    longestDimChange := (currLongestDim / prevLongestDim * 100) - 100
-    result .= "`nLongest dimension change: " . (longestDimChange >= 0 ? "+" : "") . Round(longestDimChange, 1) . "%"
-
-    if (prev.dimensions.Length() == 3) {
-        prevVolumeNum := CalculateEllipsoidVolumeNumeric(JoinDimensions(prev.dimensions), prev.unit)
-        currVolumeNum := CalculateEllipsoidVolumeNumeric(JoinDimensions(curr.dimensions), curr.unit)
-        if (prevVolumeNum != "Invalid input format" && currVolumeNum != "Invalid input format") {
-            volumeChange := (currVolumeNum / prevVolumeNum * 100) - 100
-            result .= "`nVolume change: " . (volumeChange >= 0 ? "+" : "") . Round(volumeChange, 1) . "%"
-            result .= "`nPrevious volume: " . FormatVolume(prevVolumeNum)
-            result .= "`nCurrent volume: " . FormatVolume(currVolumeNum)
+    
+    ; Calculate longest dimension change
+    longestDimChange := (currLongestDim / prevLongestDim - 1) * 100
+    result .= "`nLongest dimension change: " . (longestDimChange >= 0 ? "+" : "") . Round(longestDimChange, 1) . "%`n"
+    
+    ; Calculate volumes
+    prevVolumeNum := CalculateVolume(prev.dimensions, prev.unit)
+    currVolumeNum := CalculateVolume(curr.dimensions, curr.unit)
+    
+    ; Process volume calculations if valid
+    if (prevVolumeNum != "Invalid input" and currVolumeNum != "Invalid input") {
+        volumeChange := (currVolumeNum / prevVolumeNum - 1) * 100
+        result .= "Volume change: " . (volumeChange >= 0 ? "+" : "") . Round(volumeChange, 1) . "%`n"
+        result .= "Previous volume: " . FormatVolume(prevVolumeNum) . "`n"
+        result .= "Current volume: " . FormatVolume(currVolumeNum) . "`n"
+        
+        ; Process dates and calculate time-based metrics
+        if (previousDate) {
+            parsedPreviousDate := ParseDate(previousDate)
+            if (parsedPreviousDate == "Invalid Date") {
+                return result . "`nError: Invalid previous date format."
+            }
+            
+            if (!currentDate) {
+                FormatTime, currentDate, , MM/dd/yyyy
+            }
+            parsedCurrentDate := ParseDate(currentDate)
+            if (parsedCurrentDate == "Invalid Date") {
+                return result . "`nError: Invalid current date format."
+            }
+            
+            ; Calculate time difference
+            timeDiff := DateDiff(parsedPreviousDate, parsedCurrentDate) / 365.25
+            result .= "Time difference: " . Round(timeDiff, 2) . " years`n"
+            
+            ; Calculate growth metrics if time difference is positive
+            if (timeDiff > 0) {
+                ; Calculate doubling time in days
+                doublingTime := CalculateDoublingTime(prevVolumeNum, currVolumeNum, timeDiff)
+                doublingTimeDays := doublingTime * 365.25
+                result .= "Doubling time: " . (doublingTime != "N/A" ? Round(doublingTimeDays, 0) . " days" : doublingTime) . "`n"
+                
+                ; Calculate exponential growth rate in % per year
+                growthRate := CalculateExponentialGrowth(prevVolumeNum, currVolumeNum, timeDiff)
+                result .= "Exponential Growth Rate: " . Round(growthRate * 100, 2) . "% per year"
+            } else {
+                result .= "Note: Doubling time and Growth Rate not calculated due to invalid time difference."
+            }
+        } else {
+            result .= "Note: Doubling time and Growth Rate not calculated due to missing previous date."
         }
+    } else {
+        result .= "Error: Unable to calculate volume for one or both measurements."
     }
-
+    
     return result
 }
 
+CalculateVolume(dimensions, unit) {
+    static PI := 3.14159265358979
+    
+    if (dimensions.MaxIndex() == 1)
+        volume := (4/3) * PI * (dimensions[1] / 2) ** 3  ; Sphere
+    else if (dimensions.MaxIndex() == 2)
+        volume := (4/3) * PI * (dimensions[1] / 2) * (dimensions[2] / 2) * ((dimensions[1] + dimensions[2]) / 4)  ; Ellipsoid with 3rd dim as average
+    else if (dimensions.MaxIndex() == 3)
+        volume := CalculateEllipsoidVolumeNumeric(dimensions[1] . " x " . dimensions[2] . " x " . dimensions[3], unit)
+    else
+        return "Invalid input"
+    
+    return (unit == "mm") ? volume / 1000 : volume  ; Convert to cm³ if necessary
+}
+
+CalculateDoublingTime(initialVolume, finalVolume, time) {
+	
+    growthRate := (finalVolume / initialVolume) ** (1 / time) - 1
+    return (growthRate > 0) ? (Ln(2) / Ln(1 + growthRate)) : "N/A"
+}
+
+CalculateExponentialGrowth(initialVolume, finalVolume, time) {
+    growthRate := Ln(finalVolume/initialVolume) / time
+    return growthRate  ; Return as a decimal, will be converted to percentage in the main function
+}
+
+DateDiff(date1, date2) {
+    EnvSub, date2, %date1%, Days
+    return date2
+}
 
 FormatVolume(volume) {
-    return (volume < 1) ? Round(volume, 3) . " cc" : Round(volume, 1) . " cc"
+    return (volume < 1) ? Round(volume * 1000, 1) . " cu-mm" : Round(volume, 1) . " cc"
 }
 
 CalculateEllipsoidVolumeNumeric(input, unit) {
