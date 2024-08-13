@@ -158,7 +158,7 @@ Description: A handy tool to calculate estimated mg Fe / g dry liver according t
 
 
 ### Nodule Size Comparison
-Description: takes in 1, 2 or 3 measurements for a single lesion and calculates change in longest dimension, area and ellipsoid volume. Absolute numbers and percent change are displayed. 
+Description: takes in 1, 2 or 3 measurements for a single lesion and calculates change in longest dimension, area and ellipsoid volume. Absolute numbers and percent change are displayed. Doubling time and exponential growth rate are displayed. For 1D comparisons, a lesion is assumed to be a sphere and volumes of spheres are compared. For 2D comparisons, a third dimension is imputed as the average of the first two dimensions and volumes of resulting ellipsoids are compared. For 3D dimensions, ellipsoid equation is used to comapre volumes. 
 ```
 previous 3.5 x 2.6 cm  now 4.1 x 2.9 cm
 ```
