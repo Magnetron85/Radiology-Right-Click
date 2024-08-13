@@ -1,4 +1,5 @@
 # Radiology Right Click v1.01
+(c) 2024, GitHub user Magnetron85
 
 ## Description
 Radiology Right Click v1.01 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments.
