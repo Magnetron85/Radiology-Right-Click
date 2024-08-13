@@ -171,6 +171,18 @@ OR
 ```
 4.1 cm, previously 3.9 cm
 ```
+OR
+```
+4.1 cm, previously 3.9 cm on 01/01/2000
+```
+OR
+```
+4.1 x 3.8 cm, previously 3.9 x 3.0 cm on 01/01/2000
+```
+OR
+```
+4.1 cm on 06/01/2000, previously 3.9 cm on 01/01/2000
+```
 
 ### Sort measurement sizes 
 Descriptions: Takes in 2 or 3 numbers, sorts into descending order and separates by an "x" The function works for any number of inputs- ie a paragraph with 3 separate lesions will be treated independently and sorted appropriately. 
