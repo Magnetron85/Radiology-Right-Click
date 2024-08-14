@@ -838,23 +838,23 @@ InterpretThymusChemicalShift(chemicalShiftRatio := "", signalIntensityIndex := "
     if (chemicalShiftRatio != "" && signalIntensityIndex != "") {
         ; Both chemical shift ratio and signal intensity index are provided
         if (chemicalShiftRatio > 0.849 && signalIntensityIndex > 8.92) {
-            result := "Interpretation: Chemical Shift Ratio is greater than 0.849 and Signal Intensity Index is greater than 8.92%. Findings are consistent with thymic hyperplasia.`n`n"
+            result := "Interpretation: Chemical Shift Ratio is greater than 0.849 and Signal Intensity Index is greater than 8.92%. Calculations are in conflict and therefore indeterminate, though probably consistent with thymic hyperplasia with single dual echo technique.`n`n"
         } else if (chemicalShiftRatio <= 0.849 && signalIntensityIndex > 8.92) {
-            result := "Interpretation: Chemical Shift Ratio is less than or equal to 0.849 and Signal Intensity Index is greater than 8.92%. Calculations are in conflict and therefore indeterminate, though most likely consistent with thymic hyperplasia.`n`n"
+            result := "Interpretation: Chemical Shift Ratio is less than or equal to 0.849 and Signal Intensity Index is greater than 8.92%. Findings are consistent with thymic hyperplasia with single dual echo technique. `n`n"
         } else if (chemicalShiftRatio > 0.849 && signalIntensityIndex <= 8.92) {
-            result := "Interpretation: Chemical Shift Ratio is greater than 0.849 and Signal Intensity Index is less than or equal to 8.92%. Calculations are in conflict and therefore indeterminate, possibly thymic hyperplasia.`n`n"
+            result := "Interpretation: Chemical Shift Ratio is greater than 0.849 and Signal Intensity Index is less than or equal to 8.92%. Findings are not consistent with with typical thymic hyperplasia with single dual echo technique.`n`n"
         } else {  ; chemicalShiftRatio <= 0.849 && signalIntensityIndex <= 8.92
-            result := "Interpretation: Chemical Shift Ratio is less than or equal to 0.849 and Signal Intensity Index is less than or equal to 8.92%. Findings are not consistent with with typical thymic hyperplasia.`n`n"
+            result := "Interpretation: Chemical Shift Ratio is less than or equal to 0.849 and Signal Intensity Index is less than or equal to 8.92%. Calculations are in conflict and therefore indeterminate, possibly thymic hyperplasia with single dual echo technique.`n`n"
         }
     } else if (chemicalShiftRatio != "" && signalIntensityIndex == "") {
         ; Only chemical shift ratio is provided
-        result := "Interpretation: Chemical Shift Ratio is " . (chemicalShiftRatio > 0.849 ? "greater than" : "less than or equal to") . " 0.849.`n`n"
+        result := "Interpretation: Chemical Shift Ratio is " . (chemicalShiftRatio > 0.849 ? "greater than" : "less than or equal to") . " 0.849 with single dual echo technique.`n`n"
     } else if (chemicalShiftRatio == "" && signalIntensityIndex != "") {
         ; Only signal intensity index is provided
         if (signalIntensityIndex > 8.92) {
-            result := "Interpretation: Signal Intensity Index is greater than 8.92%. This suggests thymic hyperplasia.`n`n"
+            result := "Interpretation: Signal Intensity Index is greater than 8.92%. This suggests thymic hyperplasia with single dual echo technique.`n`n"
         } else {
-            result := "Interpretation: Signal Intensity Index is less than or equal to 8.92%. Findings are not consistent with typical thymic hyperplasia. Consider including paraspinous muscle values and calculating chemical shift ratio in addition to signal intensity ratio.`n`n"
+            result := "Interpretation: Signal Intensity Index is less than or equal to 8.92%. Findings are not consistent with typical thymic hyperplasia with single dual echo technique.`n`n"
         }
     } else {
         ; Neither chemical shift ratio nor signal intensity index is provided
