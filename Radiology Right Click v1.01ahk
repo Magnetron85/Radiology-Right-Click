@@ -96,9 +96,7 @@ LoadPreferencesFromFile()
 #If IsTargetApp()
 RButton::
 {
-    ; Get information about the window under the cursor
-    MouseGetPos, , , windowUnderCursor
-    
+        
     ; Activate the window if it's not already active
     if (windowUnderCursor != WinActive("A")) {
         WinActivate, ahk_id %windowUnderCursor%
@@ -114,6 +112,7 @@ RButton::
     CreateCustomMenu()
     Menu, CustomMenu, Show
     Menu, CustomMenu, DeleteAll
+
     return
 }
 #If
@@ -307,7 +306,19 @@ GetSelectedText() {
 ShowResult(Result) {
     global DarkMode
     options := DarkMode ? 0x1000000 : 0  ; 0x1000000 is for dark mode
+
+    ; Get current mouse position
+    MouseGetPos, originalX, originalY
+
+    ; Show the message box
     MsgBox, % options, Result, %Result%
+
+    ; Get the final cursor position after MsgBox is closed
+    MouseGetPos, finalX, finalY
+
+    ; Move the cursor back to where it was when the MsgBox was closed
+    MouseMove, %finalX%, %finalY%, 0
+
     Clipboard := Result
 }
 
@@ -1037,11 +1048,7 @@ CalculateEllipsoidVolumeNumeric(input, unit) {
     if (RegExMatch(input, RegExNeedle, match)) {
         dimensions := [match1 + 0, match2 + 0, match3 + 0]  ; Convert to numbers
         dimensions := SortDimensions(dimensions)
-        if (unit == "mm") {
-            dimensions[1] := dimensions[1] / 10
-            dimensions[2] := dimensions[2] / 10
-            dimensions[3] := dimensions[3] / 10
-        }
+
         volume := (1/6) * 3.14159265358979323846 * (dimensions[1]) * (dimensions[2]) * (dimensions[3])
         return volume
     } else {
