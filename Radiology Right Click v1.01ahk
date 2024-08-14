@@ -798,7 +798,7 @@ CheckEnhancement(value, baseline) {
 
 
 CalculateThymusChemicalShift(input) {
-    RegExNeedle := "i)thymus.*?((?:in[- ]?phase|IP|T1IP)).*?(\d+).*?((?:out[- ]?of[- ]?phase|OP|OOP|T1OP)).*?(\d+).*?paraspinous.*?((?:in[- ]?phase|IP|T1IP)).*?(\d+).*?((?:out[- ]?of[- ]?phase|OP|OOP|T1OP)).*?(\d+)"
+    RegExNeedle := "i)thymus.*?((?:in[- ]?phase|IP|T1IP)).*?(\d+).*?((?:out[- ]?of[- ]?phase|OP|OOP|T1OP)).*?(\d+)(?:.*?paraspinous.*?((?:in[- ]?phase|IP|T1IP)).*?(\d+).*?((?:out[- ]?of[- ]?phase|OP|OOP|T1OP)).*?(\d+))?"
 
     if (RegExMatch(input, RegExNeedle, match)) {
         thymusInPhase := match2
@@ -806,35 +806,66 @@ CalculateThymusChemicalShift(input) {
         paraspinousInPhase := match6
         paraspinousOutOfPhase := match8
 
-        outOfPhaseSignalIntensityIndex := (thymusOutOfPhase) / paraspinousOutOfPhase
-        inPhaseSignalIntensityIndex := (thymusInPhase) / paraspinousInPhase
-        chemicalShiftRatio := outOfPhaseSignalIntensityIndex / inPhaseSignalIntensityIndex
+        signalIntensityIndex := ((thymusInPhase-thymusOutOfPhase)/thymusInPhase)*100
 
         result := input
-        if (DisplayAllValues) {
-            result .= "`nOut of Phase Intensity Ratio: " . Round(outOfPhaseSignalIntensityIndex*100, 1) . "%`n"
-            result .= "In Phase Intensity Ratio: " . Round(inPhaseSignalIntensityIndex*100, 1)			. "%`n"
-            result .= "Chemical Shift Ratio: " . Round(chemicalShiftRatio, 2) . "`n`n"		
+        if (paraspinousInPhase && paraspinousOutOfPhase) {
+            outOfPhaseSignalRatio := (thymusOutOfPhase) / paraspinousOutOfPhase
+            inPhaseSignalRatio := (thymusInPhase) / paraspinousInPhase
+            chemicalShiftRatio := outOfPhaseSignalRatio / inPhaseSignalRatio
+
+            if (DisplayAllValues) {
+                result .= "`n`nChemical Shift Ratio: " . Round(chemicalShiftRatio, 3) . "`n"    
+                result .= "Thymus Signal Intensity Index (SII): " . round(signalIntensityIndex, 2) . "%`n"
+            }
+            result .= "`n" . InterpretThymusChemicalShift(chemicalShiftRatio, signalIntensityIndex)
+        } else {
+            if (DisplayAllValues) {
+                result .= "`nThymus Signal Intensity Index (SII): " . round(signalIntensityIndex, 2) . "%`n"
+            }
+            result .= "`n" . InterpretThymusChemicalShift("", signalIntensityIndex)
         }
-        result .= "`n" . InterpretThymusChemicalShift(chemicalShiftRatio)
         return result
     } else {
-        return "Invalid input format for thymus chemical shift calculation.`nSample syntax: Thymus IP: 100, OP: 80, Paraspinous IP: 90, OP: 85"
+        return "Invalid input format for thymus chemical shift calculation.`nSample syntax: Thymus IP: 100, OP: 80, Paraspinous IP: 90, OP: 85`nOr for thymus only: Thymus IP: 100, OP: 80"
     }
 }
 
-InterpretThymusChemicalShift(chemicalShiftRatio) {
-	global ShowCitations
+InterpretThymusChemicalShift(chemicalShiftRatio := "", signalIntensityIndex := "") {
+    global ShowCitations
+    result := ""
 
-    if (chemicalShiftRatio <= 0.849) {
-		result := "Interpretation: Chemical Shift Ratio is less than 0.849. Findings are most consistent with thymic hyperplasia.`n`n`n"
-		if (ShowCitations = 1) {
-			result .= "Citation: Priola AM, Priola SM, Ciccone G, Evangelista A, Cataldi A, Gned D, Pazè F, Ducco L, Moretti F, Brundu M, Veltri A. Differentiation of rebound and lymphoid thymic hyperplasia from anterior mediastinal tumors with dual-echo chemical-shift MR imaging in adulthood: reliability of the chemical-shift ratio and signal intensity index. Radiology. 2015 Jan;274(1):238-49. doi: 10.1148/radiol.14132665. Epub 2014 Aug 7. PMID: 25105246.`n" 
-		}
+    if (chemicalShiftRatio != "" && signalIntensityIndex != "") {
+        ; Both chemical shift ratio and signal intensity index are provided
+        if (chemicalShiftRatio > 0.849 && signalIntensityIndex > 8.92) {
+            result := "Interpretation: Chemical Shift Ratio is greater than 0.849 and Signal Intensity Index is greater than 8.92%. Findings are consistent with thymic hyperplasia.`n`n"
+        } else if (chemicalShiftRatio <= 0.849 && signalIntensityIndex > 8.92) {
+            result := "Interpretation: Chemical Shift Ratio is less than or equal to 0.849 and Signal Intensity Index is greater than 8.92%. Calculations are in conflict and therefore indeterminate, though most likely consistent with thymic hyperplasia.`n`n"
+        } else if (chemicalShiftRatio > 0.849 && signalIntensityIndex <= 8.92) {
+            result := "Interpretation: Chemical Shift Ratio is greater than 0.849 and Signal Intensity Index is less than or equal to 8.92%. Calculations are in conflict and therefore indeterminate, possibly thymic hyperplasia.`n`n"
+        } else {  ; chemicalShiftRatio <= 0.849 && signalIntensityIndex <= 8.92
+            result := "Interpretation: Chemical Shift Ratio is less than or equal to 0.849 and Signal Intensity Index is less than or equal to 8.92%. Findings are not consistent with with typical thymic hyperplasia.`n`n"
+        }
+    } else if (chemicalShiftRatio != "" && signalIntensityIndex == "") {
+        ; Only chemical shift ratio is provided
+        result := "Interpretation: Chemical Shift Ratio is " . (chemicalShiftRatio > 0.849 ? "greater than" : "less than or equal to") . " 0.849.`n`n"
+    } else if (chemicalShiftRatio == "" && signalIntensityIndex != "") {
+        ; Only signal intensity index is provided
+        if (signalIntensityIndex > 8.92) {
+            result := "Interpretation: Signal Intensity Index is greater than 8.92%. This suggests thymic hyperplasia.`n`n"
+        } else {
+            result := "Interpretation: Signal Intensity Index is less than or equal to 8.92%. Findings are not consistent with typical thymic hyperplasia. Consider including paraspinous muscle values and calculating chemical shift ratio in addition to signal intensity ratio.`n`n"
+        }
     } else {
-        result := "Interpretation: Chemical Shift Ratio is greater than 0.849. Findings are not consistent with thymic hyperplasia and can be seen with malignancy."
+        ; Neither chemical shift ratio nor signal intensity index is provided
+        result := "Error: Both Chemical Shift Ratio and Signal Intensity Index are missing. At least one value is required for interpretation.`n`n"
     }
-	return result
+
+    if (ShowCitations = 1) {
+        result .= "Citation: Priola AM, Priola SM, Ciccone G, Evangelista A, Cataldi A, Gned D, Pazè F, Ducco L, Moretti F, Brundu M, Veltri A. Differentiation of rebound and lymphoid thymic hyperplasia from anterior mediastinal tumors with dual-echo chemical-shift MR imaging in adulthood: reliability of the chemical-shift ratio and signal intensity index. Radiology. 2015 Jan;274(1):238-49. doi: 10.1148/radiol.14132665. Epub 2014 Aug 7. PMID: 25105246.`n"
+    }
+
+    return result
 }
 
 
