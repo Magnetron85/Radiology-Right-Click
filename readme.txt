@@ -1,4 +1,4 @@
-# Radiology Right Click v1.01
+# Radiology Right Click v1.02
 (c) 2024, GitHub user Magnetron85
 
 ## Description
