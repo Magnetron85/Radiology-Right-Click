@@ -1,7 +1,7 @@
 ; ==========================================
 ; Radiologist's Helper Script
 ; Radiology Right Click
-; Version: 1.0
+; Version: 1.02
 ; Description: This AutoHotkey script provides various calculation tools and utilities
 ;              for radiologists, including volume calculations, date estimations,
 ;              and statistical analysis of measurements.
@@ -34,7 +34,9 @@ global ShowArterialAge :=
 global g_SelectedText := ""
 global PauseDurationChoice
 global TargetApps := ["ahk_class Notepad", "ahk_exe notepad.exe", "ahk_class PowerScribe", "ahk_exe PowerScribe.exe", "ahk_class PowerScribe360", "ahk_exe Nuance.PowerScribe360.exe", "ahk_class PowerScribe | Reporting"]
-
+global ResultText
+global InvisibleControl
+global originalMouseX, originalMouseY
 
 ; Load preferences (keep this function at the top)
 LoadPreferencesFromFile() {
@@ -286,6 +288,11 @@ CompareNoduleSizes:
     ShowResult(Result)
 return
 
+CloseResultBox:
+    Gui, ResultBox:Destroy
+
+return
+
 ; Function to get selected text (unchanged)
 GetSelectedText() {
     OldClipboard := ClipboardAll
@@ -302,24 +309,112 @@ GetSelectedText() {
     return SelectedText
 }
 
-; Function to show results (unchanged)
+
 ShowResult(Result) {
-    global DarkMode
-    options := DarkMode ? 0x1000000 : 0  ; 0x1000000 is for dark mode
+    global DarkMode, originalMouseX, originalMouseY
+    
+    ; Get current mouse position (relative to the entire desktop)
+    CoordMode, Mouse, Screen
+    MouseGetPos, originalMouseX, originalMouseY
+    
+    ; Determine which monitor the mouse is on
+    SysGet, monitorCount, MonitorCount
+    Loop, %monitorCount%
+    {
+        SysGet, monArea, Monitor, %A_Index%
+        if (originalMouseX >= monAreaLeft && originalMouseX <= monAreaRight && originalMouseY >= monAreaTop && originalMouseY <= monAreaBottom)
+        {
+            activeMonitor := A_Index
+            break
+        }
+    }
+    
+    ; Get dimensions of the active monitor
+    SysGet, workArea, MonitorWorkArea, %activeMonitor%
+    monitorWidth := workAreaRight - workAreaLeft
+    monitorHeight := workAreaBottom - workAreaTop
+    
+    ; Calculate maximum dimensions for the GUI (50% of monitor width and height)
+    maxWidth := monitorWidth * 0.5
+    maxHeight := monitorHeight * 0.5
+    
+    ; Create a temporary GUI to measure text
+    Gui, TempMeasure:New, +AlwaysOnTop
+    Gui, TempMeasure:Font, s10, Segoe UI
+    Gui, TempMeasure:Add, Text, w%maxWidth% wrap, %Result%
+    GuiControlGet, TextSize, TempMeasure:Pos, Static1
+	GuiControl, Focus, Invisible
+    Gui, TempMeasure:Destroy
+    
+    ; Calculate required width and height
+    requiredWidth := TextSizeW + 40  ; Add some padding
+    requiredHeight := TextSizeH + 80  ; Add space for button and padding
+    
+    ; Adjust dimensions if they exceed the maximum
+    guiWidth := (requiredWidth > maxWidth) ? maxWidth : requiredWidth
+    guiHeight := (requiredHeight > maxHeight) ? maxHeight : requiredHeight
+    
+    ; Ensure minimum dimensions
+    guiWidth := (guiWidth < 300) ? 300 : guiWidth
+    guiHeight := (guiHeight < 200) ? 200 : guiHeight
+    
+    ; Calculate position for the GUI
+    xPos := originalMouseX + 10
+    yPos := originalMouseY + 10
+    
+    ; Ensure the GUI doesn't go off-screen
+    if (xPos + guiWidth > workAreaRight)
+        xPos := workAreaRight - guiWidth
+    if (yPos + guiHeight > workAreaBottom)
+        yPos := workAreaBottom - guiHeight
+    
+    ; Create GUI with AlwaysOnTop option
+    Gui, ResultBox:New, +AlwaysOnTop -SysMenu +Owner
+    Gui, ResultBox:Margin, 10, 10
+    
+    ; Apply styling
+    if (DarkMode) {
+        Gui, ResultBox:Color, 0x2C2C2C, 0x2C2C2C
+        textColor := "cE0E0E0"
+        buttonOptions := "Background333333 c999999"
+    } else {
+        Gui, ResultBox:Color, 0xF0F0F0, 0xF0F0F0
+        textColor := "c000000"
+        buttonOptions := "Background777777 cFFFFFF"
+    }
+    
+    Gui, ResultBox:Font, s10 %textColor%, Segoe UI
+    
+    ; Add text control with vertical scrollbar and word wrap, and no highlighting
+    editHeight := guiHeight - 50  ; Subtract height for button and margins
+    Gui, ResultBox:Add, Edit, vResultText ReadOnly -E0x200 +E0x20000 Wrap VScroll w%guiWidth% h%editHeight%, %Result%
+    
+    ; Add a close button with improved styling
+    Gui, ResultBox:Font, s9 bold, Segoe UI
+    Gui, ResultBox:Add, Button, gCloseResultBox w90 x10 y+10 %buttonOptions%, Close
+    
+    ; Show the GUI
+    Gui, ResultBox:Show, x%xPos% y%yPos% w%guiWidth% h%guiHeight%, Result
+    
+    ; Add an invisible control for focus
+	Gui, ResultBox:Add, Text, Hidden vInvisibleControl
 
-    ; Get current mouse position
-    MouseGetPos, originalX, originalY
+	; Show the GUI
+	Gui, ResultBox:Show, x%xPos% y%yPos% w%guiWidth% h%guiHeight%, Result
 
-    ; Show the message box
-    MsgBox, % options, Result, %Result%
+	; Shift focus to the invisible control
+	GuiControl, Focus, InvisibleControl
 
-    ; Get the final cursor position after MsgBox is closed
-    MouseGetPos, finalX, finalY
-
-    ; Move the cursor back to where it was when the MsgBox was closed
-    MouseMove, %finalX%, %finalY%, 0
-
+	; Get the position of the close button
+	GuiControlGet, ClosePos, ResultBox:Pos, Close
+    
+    ; Move the mouse over the close button
+    MouseMove, % xPos + ClosePosX + ClosePosW/2, % yPos + ClosePosY + ClosePosH/2, 0
+    
+    ; Copy result to clipboard
     Clipboard := Result
+    
+    return
 }
 
 CalculateEllipsoidVolume(input) {
@@ -815,8 +910,8 @@ CalculateThymusChemicalShift(input) {
             chemicalShiftRatio := outOfPhaseSignalRatio / inPhaseSignalRatio
 
             if (DisplayAllValues) {
-                result .= "`n`nChemical Shift Ratio: " . Round(chemicalShiftRatio, 3) . "`n"    
-                result .= "Thymus Signal Intensity Index (SII): " . round(signalIntensityIndex, 2) . "%`n"
+                result .= "`n`nChemical Shift Ratio: " . Round(chemicalShiftRatio, 3) . " (hyperplasia < 0.849)`n"    
+                result .= "Thymus Signal Intensity Index (SII): " . round(signalIntensityIndex, 2) . "% (hyperplasia > 8.92)`n"
             }
             result .= "`n" . InterpretThymusChemicalShift(chemicalShiftRatio, signalIntensityIndex)
         } else {
