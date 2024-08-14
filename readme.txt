@@ -11,6 +11,8 @@ The script can be paused to see the default right click menu for a specified tim
 
 Users can hide calculators that are infrequently or not used. Preferences are saved in a preferences.ini which is created in the script directory if preferences are edited.
 
+Suggested usage: make Powerscribe templates that match input of this script to ensure no formatting issues at runtime.
+
 ## Author
 Created by an amateur programming enthusiast with a passion for radiology, in partnership with Claude, an AI assistant.
 
