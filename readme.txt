@@ -142,9 +142,13 @@ Enhanced: 80 HU, Delayed: 40 HU
 
 
 ### Thymus Chemical Shift
-Description: Calculates thymic chemical shift ratio. Cut off set to 0.849 according to reference attached. 
+Description: Calculates thymic chemical shift ratio and/or signal intensity index. Cut off set to CSR 0.849 and SII 8.92% according to reference provided (if preference enabled to show reference). 
 ```
 Thymus IP: 100, OP: 80, Paraspinous IP: 90, OP: 85
+```
+OR
+```
+Thymus IP: 100, OP: 80
 ```
 
 
