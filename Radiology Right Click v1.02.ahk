@@ -37,6 +37,7 @@ global TargetApps := ["ahk_class Notepad", "ahk_exe notepad.exe", "ahk_class Pow
 global ResultText
 global InvisibleControl
 global originalMouseX, originalMouseY
+global ScanDate, ScanTime, PremedProtocol
 
 ; Load preferences (keep this function at the top)
 LoadPreferencesFromFile() {
@@ -64,6 +65,7 @@ LoadPreferencesFromFile() {
 		IniRead, ShowCalciumScorePercentile, %preferencesFile%, Calculations, ShowCalciumScorePercentile, 1
 		IniRead, ShowCitations, %preferencesFile%, Display, ShowCitations, 1
 		IniRead, ShowArterialAge, %preferencesFile%, Display, ShowArterialAge, 1
+		IniRead, ShowContrastPremedication, %preferencesFile%, Calculations, ShowContrastPremedication, 1
     } else {
         MsgBox, Preferences file not found: %preferencesFile%. File will be created if preferences are edited.
     }
@@ -186,6 +188,9 @@ CreateCustomMenu() {
     if (ShowNumberRange) {
         Menu, CustomMenu, Add, Calculate Number Range, Range
     }
+	if (ShowContrastPremedication) {
+    Menu, CustomMenu, Add, Calculate Contrast Premedication, CalculateContrastPremedication
+	}
     Menu, CustomMenu, Add
     Menu, CustomMenu, Add, Pause Script, PauseScript
     Menu, CustomMenu, Add, Preferences, ShowPreferences
@@ -1225,24 +1230,26 @@ ShowPreferences() {
     ;Gui, Add, Text, x10 y10 w200, Display Options:
     ;Gui, Add, Checkbox, x10 y30 w200 vDisplayUnits Checked%DisplayUnits%, Display units with values
     ;Gui, Add, Checkbox, x10 y60 w200 vDisplayAllValues Checked%DisplayAllValues%, Display all calculated values
-    ;Gui, Add, Checkbox, x10 y90 w200 vDarkMode Checked%DarkMode% gToggleDarkMode, Dark Mode
+    
     Gui, Add, Text, x10 y10 w200, Select functions to display:
-    Gui, Add, Checkbox, x10 y30 w200 vShowEllipsoidVolume Checked%ShowEllipsoidVolume%, Ellipsoid Volume
-    Gui, Add, Checkbox, x10 y60 w200 vShowBulletVolume Checked%ShowBulletVolume%, Bullet Volume
-    Gui, Add, Checkbox, x10 y90 w200 vShowPSADensity Checked%ShowPSADensity%, PSA Density
-    Gui, Add, Checkbox, x10 y120 w200 vShowPregnancyDates Checked%ShowPregnancyDates%, Pregnancy Dates
-    Gui, Add, Checkbox, x10 y150 w200 vShowMenstrualPhase Checked%ShowMenstrualPhase%, Menstrual Phase
-    Gui, Add, Checkbox, x10 y180 w200 vShowAdrenalWashout Checked%ShowAdrenalWashout%, Adrenal Washout
-    Gui, Add, Checkbox, x10 y210 w200 vShowThymusChemicalShift Checked%ShowThymusChemicalShift%, Thymus Chemical Shift
-    Gui, Add, Checkbox, x10 y240 w200 vShowHepaticSteatosis Checked%ShowHepaticSteatosis%, Hepatic Steatosis
-    Gui, Add, Checkbox, x10 y270 w200 vShowMRILiverIron Checked%ShowMRILiverIron%, MRI Liver Iron Content
-    Gui, Add, Checkbox, x10 y300 w200 vShowStatistics Checked%ShowStatistics%, Calculate Statistics
-    Gui, Add, Checkbox, x10 y330 w200 vShowNumberRange Checked%ShowNumberRange%, Calculate Number Range
-	Gui, Add, Checkbox, x10 y360 w200 vShowCalciumScorePercentile Checked%ShowCalciumScorePercentile%, Calculate Calcium Score Percentile
-    Gui, Add, Checkbox, x10 y390 w200 vShowCitations Checked%ShowCitations%, Show Citations in Output
-    Gui, Add, Checkbox, x10 y420 w200 vShowArterialAge Checked%ShowArterialAge%, Show Arterial Age
-	Gui, Add, Text, x10 y450 w200, Pause Duration (current: %currentPauseDuration%):
-    Gui, Add, DropDownList, x10 y480 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
+	Gui, Add, Checkbox, x10 y30 w200 vDarkMode Checked%DarkMode% gToggleDarkMode, Dark Mode
+    Gui, Add, Checkbox, x10 y60 w200 vShowEllipsoidVolume Checked%ShowEllipsoidVolume%, Ellipsoid Volume
+    Gui, Add, Checkbox, x10 y90 w200 vShowBulletVolume Checked%ShowBulletVolume%, Bullet Volume
+    Gui, Add, Checkbox, x10 y120 w200 vShowPSADensity Checked%ShowPSADensity%, PSA Density
+    Gui, Add, Checkbox, x10 y150 w200 vShowPregnancyDates Checked%ShowPregnancyDates%, Pregnancy Dates
+    Gui, Add, Checkbox, x10 y180 w200 vShowMenstrualPhase Checked%ShowMenstrualPhase%, Menstrual Phase
+    Gui, Add, Checkbox, x10 y210 w200 vShowAdrenalWashout Checked%ShowAdrenalWashout%, Adrenal Washout
+    Gui, Add, Checkbox, x10 y240 w200 vShowThymusChemicalShift Checked%ShowThymusChemicalShift%, Thymus Chemical Shift
+    Gui, Add, Checkbox, x10 y270 w200 vShowHepaticSteatosis Checked%ShowHepaticSteatosis%, Hepatic Steatosis
+    Gui, Add, Checkbox, x10 y300 w200 vShowMRILiverIron Checked%ShowMRILiverIron%, MRI Liver Iron Content
+    Gui, Add, Checkbox, x10 y330 w200 vShowStatistics Checked%ShowStatistics%, Calculate Statistics
+    Gui, Add, Checkbox, x10 y360 w200 vShowNumberRange Checked%ShowNumberRange%, Calculate Number Range
+	Gui, Add, Checkbox, x10 y390 w200 vShowCalciumScorePercentile Checked%ShowCalciumScorePercentile%, Calculate Calcium Score Percentile
+    Gui, Add, Checkbox, x10 y420 w200 vShowCitations Checked%ShowCitations%, Show Citations in Output
+    Gui, Add, Checkbox, x10 y450 w200 vShowArterialAge Checked%ShowArterialAge%, Show Arterial Age
+	Gui, Add, Checkbox, x10 y480 w200 vShowContrastPremedication Checked%ShowContrastPremedication%, Calculate Contrast Premedication
+	Gui, Add, Text, x10 y510 w200, Pause Duration (current: %currentPauseDuration%):
+    Gui, Add, DropDownList, x10 y540 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
     if (PauseDuration = 180000)
         GuiControl, Choose, PauseDurationChoice, 1
     else if (PauseDuration = 600000)
@@ -1253,10 +1260,10 @@ ShowPreferences() {
         GuiControl, Choose, PauseDurationChoice, 4
     else if (PauseDuration = 36000000)
         GuiControl, Choose, PauseDurationChoice, 5
-    Gui, Add, Button, x60 y520 w100 gSavePreferences, Save
+    Gui, Add, Button, x60 y570 w100 gSavePreferences, Save
     
     ApplyDarkMode(preferencesHwnd, DarkMode)
-    Gui, Show, w220 h600
+    Gui, Show, w220 h660
 }
 
 ToggleDarkMode:
@@ -1311,6 +1318,7 @@ SavePreferences:
     global ShowMRILiverIron, ShowStatistics, ShowNumberRange
     global PauseDuration, DarkMode
 	global ShowArterialAge, ShowCitations
+	global ShowContrastPremedication
 
     if (PauseDurationChoice = "3 minutes")
         PauseDuration := 180000
@@ -1350,6 +1358,7 @@ SavePreferencesToFile() {
 	IniWrite, %ShowArterialAge%, %A_ScriptDir%\preferences.ini, Display, ShowArterialAge
     IniWrite, %DarkMode%, %A_ScriptDir%\preferences.ini, Display, DarkMode
 	IniWrite, %ShowCalciumScorePercentile%, %A_ScriptDir%\preferences.ini, Calculations, ShowCalciumScorePercentile
+	IniWrite, %ShowContrastPremedication%, %A_ScriptDir%\preferences.ini, Calculations, ShowContrastPremedication
 }
 
 PreferencesGuiClose:
@@ -1825,9 +1834,201 @@ DateCalc(date, days) {
     return result
 }
 
+;=======================================================================
+; Contrast Premedication Function
 
+CalculateContrastPremedication() {
+    defaultDateTime := GetDefaultDateTime()
+    FormatTime, defaultDate, %defaultDateTime%, yyyy-MM-dd
+    FormatTime, defaultTime, %defaultDateTime%, HH:mm
 
+    Gui, ContrastPremed:New, +AlwaysOnTop
+    Gui, ContrastPremed:Add, Text, x10 y10, Scan Date:
+    Gui, ContrastPremed:Add, DateTime, x10 y30 w120 vScanDate, %defaultDate%
+    Gui, ContrastPremed:Add, Text, x140 y10, Scan Time:
+    Gui, ContrastPremed:Add, DropDownList, x140 y30 w100 vScanTime, % CreateTimeList(defaultTime)
+    Gui, ContrastPremed:Add, Radio, x10 y60 w200 vPremedProtocol Checked, Prednisone (13-7-1 hour)
+    Gui, ContrastPremed:Add, Radio, x10 y80 w200, Methylprednisolone (12-2 hour)
+    Gui, ContrastPremed:Add, Checkbox, x10 y100 w200 vIncludeDiphenhydramine Checked, Include Diphenhydramine
+    Gui, ContrastPremed:Add, Button, x10 y130 w100 gCalculatePremedTiming, Calculate
+    Gui, ContrastPremed:Add, Button, x120 y130 w100 gShowPremedDosages, Show Dosages
+    Gui, ContrastPremed:Show, w250 h160, Contrast Premedication
 
+    return
+}
+
+GetDefaultDateTime() {
+    defaultDateTime := A_Now
+    EnvAdd, defaultDateTime, 13, Hours
+    
+    ; Extract hours and minutes
+    FormatTime, hours, %defaultDateTime%, HH
+    FormatTime, minutes, %defaultDateTime%, mm
+    
+    ; Round up to nearest 5 minutes
+    minutes := Ceil(minutes / 5) * 5
+    if (minutes = 60) {
+        minutes := 0
+        hours := hours + 1
+        if (hours = 24) {
+            hours := 0
+            ; Add a day to the date
+            EnvAdd, defaultDateTime, 1, Days
+        }
+    }
+    
+    ; Format the time back into the datetime
+    formattedTime := Format("{:02d}{:02d}00", hours, minutes)
+    FormatTime, formattedDate, %defaultDateTime%, yyyyMMdd
+    return formattedDate . formattedTime
+}
+
+CreateTimeList(defaultTime) {
+    timeList := ""
+    Loop, 24 {
+        hour := A_Index - 1
+        Loop, 12 {
+            minute := (A_Index - 1) * 5
+            time := Format("{:02d}:{:02d}", hour, minute)
+            timeList .= time . "|"
+        }
+    }
+    ; Remove the trailing pipe
+    timeList := RTrim(timeList, "|")
+    
+    ; Set the default time
+    if (defaultTime) {
+        timeList := StrReplace(timeList, defaultTime, defaultTime . "||")
+    }
+    
+    return timeList
+}
+
+CalculatePremedTiming:
+    Gui, ContrastPremed:Submit, NoHide
+    scanDateTime := CombineDateTime(ScanDate, ScanTime)
+    if (!scanDateTime) {
+        MsgBox, 0, Error, Please enter a valid date and time.
+        return
+    }
+    CalculateAndShowPremedResult(scanDateTime, PremedProtocol, includeDiphenhydramine)
+return
+
+CombineDateTime(scanDate, scanTime) {
+    FormatTime, formattedDate, %scanDate%, yyyyMMdd
+    formattedTime := StrReplace(scanTime, ":")
+    fullDateTime := formattedDate . formattedTime . "00"
+    
+    if (!IsValidDateTime(fullDateTime)) {
+        return false
+    }
+    
+    return fullDateTime
+}
+
+CalculateAndShowPremedResult(scanDateTime, premedProtocol, includeDiphenhydramine) {
+    FormatTime, scanDateTimeFormatted, %scanDateTime%, MM/dd/yyyy hh:mm tt
+    
+    result := "Scan time: " . scanDateTimeFormatted . " Contrast Premedication Schedule:`n`n"
+    
+    if (premedProtocol = 1) {
+        ; Prednisone-based protocol
+        result .= FormatPremedTime(scanDateTime, -13, "13", premedProtocol, includeDiphenhydramine)
+        result .= FormatPremedTime(scanDateTime, -7, "7", premedProtocol, includeDiphenhydramine)
+        result .= FormatPremedTime(scanDateTime, -1, "1", premedProtocol, includeDiphenhydramine)
+    } else {
+        ; Methylprednisolone-based protocol
+        result .= FormatPremedTime(scanDateTime, -12, "12", premedProtocol, includeDiphenhydramine)
+        result .= FormatPremedTime(scanDateTime, -2, "2", premedProtocol, includeDiphenhydramine)
+    }
+    
+    result .= "`nNote: Premedication regimens less than 4-5 hours in duration (oral or IV) have not been shown to be effective.`n"
+    result .= "If a patient is unable to take oral medication, 200 mg hydrocortisone IV may be substituted for each dose of oral prednisone.`n"
+    
+    if (ShowCitations) {
+        result .= "`nCitation: ACR Manual on Contrast Media. 2023 American College of Radiology. https://www.acr.org/Clinical-Resources/Contrast-Manual`n"
+    }
+    
+    ShowResult(result)
+}
+
+FormatPremedTime(scanTime, hoursOffset, label, protocol, includeDiphenhydramine) {
+    premedTime := DateAdd(scanTime, hoursOffset, "hours")
+    FormatTime, premedTimeFormatted, %premedTime%, MM/dd/yyyy hh:mm tt
+    
+    medication := GetMedicationInfo(label, protocol, includeDiphenhydramine)
+    
+    return label . " hours before (" . premedTimeFormatted . "):`n" . medication . "`n`n"
+}
+
+GetMedicationInfo(label, protocol, includeDiphenhydramine) {
+    if (protocol = 1) {  ; Prednisone-based protocol
+        medication := "- Prednisone 50 mg PO"
+        if (label = "1" && includeDiphenhydramine) {
+            medication .= "`n- Diphenhydramine 50 mg IV, IM, or PO"
+        }
+    } else {  ; Methylprednisolone-based protocol
+        medication := "- Methylprednisolone 32 mg PO"
+        if (label = "2" && includeDiphenhydramine) {
+            medication .= "`n- Diphenhydramine 50 mg IV, IM, or PO"
+        }
+    }
+    return medication
+}
+
+IsValidDateTime(dateTimeStr) {
+    try {
+        FormatTime, test, %dateTimeStr%, yyyy-MM-dd HH:mm:ss
+        return true
+    } catch {
+        return false
+    }
+}
+
+ShowPremedDosages:
+    Gui, ContrastPremed:Submit, NoHide
+    ShowPremedDosages(PremedProtocol, IncludeDiphenhydramine)
+return
+
+ShowPremedDosages(premedProtocol, includeDiphenhydramine) {
+    dosages := "Contrast Premedication Dosages:`n`n"
+    
+    if (premedProtocol = 1) {
+        dosages .= "Prednisone-based Protocol (13-7-1 hour):`n`n"
+        dosages .= "13 hours before:`n- Prednisone 50 mg PO`n`n"
+        dosages .= "7 hours before:`n- Prednisone 50 mg PO`n`n"
+        dosages .= "1 hour before:`n- Prednisone 50 mg PO`n"
+        if (includeDiphenhydramine) {
+            dosages .= "- Diphenhydramine 50 mg IV, IM, or PO`n"
+        }
+    } else {
+        dosages .= "Methylprednisolone-based Protocol (12-2 hour):`n`n"
+        dosages .= "12 hours before:`n- Methylprednisolone 32 mg PO`n`n"
+        dosages .= "2 hours before:`n- Methylprednisolone 32 mg PO`n"
+        if (includeDiphenhydramine) {
+            dosages .= "- Diphenhydramine 50 mg IV, IM, or PO`n"
+        }
+    }
+    
+    dosages .= "`nNotes:`n"
+    dosages .= "- Premedication regimens less than 4-5 hours in duration (oral or IV) have not been shown to be effective.`n"
+    dosages .= "- If a patient is unable to take oral medication, 200 mg hydrocortisone IV may be substituted for each dose of oral prednisone.`n"
+    dosages .= "- Diphenhydramine is considered optional. If a patient is allergic to diphenhydramine, an alternate anti-histamine without cross-reactivity may be considered, or the anti-histamine may be omitted.`n"
+    dosages .= "- These dosages are based on the ACR Manual on Contrast Media. Please consult with a healthcare professional for patient-specific recommendations.`n"
+    
+    if (ShowCitations) {
+        dosages .= "`nCitation: ACR Manual on Contrast Media. 2023 American College of Radiology. https://www.acr.org/Clinical-Resources/Contrast-Manual`n"
+    }
+    
+    ShowResult(dosages)
+}
+
+DateAdd(datetime, value, unit) {
+    EnvAdd, datetime, %value%, %unit%
+    return datetime
+}
+
+;============= END PREMEDICATION FUNCTION =============================
 
 ^!p::ShowPreferences()
 
