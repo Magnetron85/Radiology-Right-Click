@@ -36,8 +36,14 @@ Created by an amateur programming enthusiast with a passion for radiology, in pa
 
 ## Usage and Installation
 
-The script does not require installation on a hospital owned workstation.
+The script does not require installation on a hospital owned workstation. You may or may not have permission to download .exe files. 
 
+Pathway #1: 
+1.) Download the .exe file from GitHub. 
+2.) Double click to run. 
+3.) If you do not have permission to download .exe files, download on a personal computer and place on USB stick. Then plug into computer, double click and run.
+
+Pathway #2:
 1) Download AutoHotKey v 1.1 on a PC that you have permission to install software (often a personal PC)
 2) Download script fron GitHub on the same PC you installed AutoHotKey v 1.1
 3) Compile script. 
