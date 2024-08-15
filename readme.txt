@@ -217,6 +217,13 @@ OR
 ### Calculate statistics (takes in any number of digits)
 ```
 Returns various statistics meaningful to daily practice. More statistics are returned for larger datasets.
+```
+
+```
+### Calculate premedication
+```
+User enters date and time of scan in GUI (defaulted to 13 hours in future). Function returns time, medication and dosage for contrast allergy premedication per ACR contrast manual.
+
 
 
 
