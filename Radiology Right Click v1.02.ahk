@@ -1232,7 +1232,7 @@ ShowPreferences() {
     ;Gui, Add, Checkbox, x10 y60 w200 vDisplayAllValues Checked%DisplayAllValues%, Display all calculated values
     
     Gui, Add, Text, x10 y10 w200, Select functions to display:
-	Gui, Add, Checkbox, x10 y30 w200 vDarkMode Checked%DarkMode% gToggleDarkMode, Dark Mode
+	; Gui, Add, Checkbox, x10 y30 w200 vDarkMode Checked%DarkMode% gToggleDarkMode, Dark Mode
     Gui, Add, Checkbox, x10 y60 w200 vShowEllipsoidVolume Checked%ShowEllipsoidVolume%, Ellipsoid Volume
     Gui, Add, Checkbox, x10 y90 w200 vShowBulletVolume Checked%ShowBulletVolume%, Bullet Volume
     Gui, Add, Checkbox, x10 y120 w200 vShowPSADensity Checked%ShowPSADensity%, PSA Density
@@ -1273,23 +1273,25 @@ return
 
 ApplyDarkMode(hwnd, isDarkMode) {
     static DWMWA_USE_IMMERSIVE_DARK_MODE := 20
-    if (isDarkMode) {
+	; Apply styling
+
+   if (isDarkMode) {
         DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", hwnd, "Int", DWMWA_USE_IMMERSIVE_DARK_MODE, "Int*", true, "Int", 4)
-        Gui, Color, 0x202020, 0x202020
-        GuiControl, +Background0x202020 +c0xFFFFFF, DisplayUnits
-        GuiControl, +Background0x202020 +c0xFFFFFF, DisplayAllValues
-        GuiControl, +Background0x202020 +c0xFFFFFF, DarkMode
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowEllipsoidVolume
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowBulletVolume
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowPSADensity
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowPregnancyDates
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowMenstrualPhase
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowAdrenalWashout
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowThymusChemicalShift
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowHepaticSteatosis
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowMRILiverIron
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowStatistics
-        GuiControl, +Background0x202020 +c0xFFFFFF, ShowNumberRange
+        Gui, Color, 0x2C2C2C, 0x2C2C2C
+        GuiControl, +Background0x202020 +cE0E0E0, DisplayUnits
+        GuiControl, +Background0x202020 +cE0E0E0, DisplayAllValues
+        GuiControl, +Background0x202020 +cE0E0E0, DarkMode
+        GuiControl, +Background0x202020 +cE0E0E0, ShowEllipsoidVolume
+        GuiControl, +Background0x202020 +cE0E0E0, ShowBulletVolume
+        GuiControl, +Background0x202020 +cE0E0E0, ShowPSADensity
+        GuiControl, +Background0x202020 +cE0E0E0, ShowPregnancyDates
+        GuiControl, +Background0x202020 +cE0E0E0, ShowMenstrualPhase
+        GuiControl, +Background0x202020 +cE0E0E0, ShowAdrenalWashout
+        GuiControl, +Background0x202020 +cE0E0E0, ShowThymusChemicalShift
+        GuiControl, +Background0x202020 +cE0E0E0, ShowHepaticSteatosis
+        GuiControl, +Background0x202020 +cE0E0E0, ShowMRILiverIron
+        GuiControl, +Background0x202020 +cE0E0E0, ShowStatistics
+        GuiControl, +Background0x202020 +cE0E0E0, ShowNumberRange
     } else {
         DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", hwnd, "Int", DWMWA_USE_IMMERSIVE_DARK_MODE, "Int*", false, "Int", 4)
         Gui, Color, Default
@@ -1842,6 +1844,40 @@ CalculateContrastPremedication() {
     FormatTime, defaultDate, %defaultDateTime%, yyyy-MM-dd
     FormatTime, defaultTime, %defaultDateTime%, HH:mm
 
+    ; Get current mouse position (relative to the entire desktop)
+    CoordMode, Mouse, Screen
+    MouseGetPos, mouseX, mouseY
+
+    ; Determine which monitor the mouse is on
+    SysGet, monitorCount, MonitorCount
+    Loop, %monitorCount%
+    {
+        SysGet, monArea, Monitor, %A_Index%
+        if (mouseX >= monAreaLeft && mouseX <= monAreaRight && mouseY >= monAreaTop && mouseY <= monAreaBottom)
+        {
+            activeMonitor := A_Index
+            break
+        }
+    }
+
+    ; Get dimensions of the active monitor
+    SysGet, workArea, MonitorWorkArea, %activeMonitor%
+    monitorWidth := workAreaRight - workAreaLeft
+    monitorHeight := workAreaBottom - workAreaTop
+
+    ; Calculate GUI dimensions and position
+    guiWidth := 250
+    guiHeight := 160
+    xPos := mouseX + 10
+    yPos := mouseY + 10
+
+    ; Ensure the GUI doesn't go off-screen
+    if (xPos + guiWidth > workAreaRight)
+        xPos := workAreaRight - guiWidth
+    if (yPos + guiHeight > workAreaBottom)
+        yPos := workAreaBottom - guiHeight
+
+    ; Create GUI with AlwaysOnTop option and position it near the mouse
     Gui, ContrastPremed:New, +AlwaysOnTop
     Gui, ContrastPremed:Add, Text, x10 y10, Scan Date:
     Gui, ContrastPremed:Add, DateTime, x10 y30 w120 vScanDate, %defaultDate%
@@ -1852,7 +1888,7 @@ CalculateContrastPremedication() {
     Gui, ContrastPremed:Add, Checkbox, x10 y100 w200 vIncludeDiphenhydramine Checked, Include Diphenhydramine
     Gui, ContrastPremed:Add, Button, x10 y130 w100 gCalculatePremedTiming, Calculate
     Gui, ContrastPremed:Add, Button, x120 y130 w100 gShowPremedDosages, Show Dosages
-    Gui, ContrastPremed:Show, w250 h160, Contrast Premedication
+    Gui, ContrastPremed:Show, x%xPos% y%yPos% w%guiWidth% h%guiHeight%, Contrast Premedication
 
     return
 }
