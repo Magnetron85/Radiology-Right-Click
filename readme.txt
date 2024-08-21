@@ -2,8 +2,11 @@
 (c) 2024, GitHub user Magnetron85
 
 ## Description
-Radiology Right Click v1.01 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments. The script should be easily modifiable for non-PowerScribe environments.
+Radiology Right Click v1.02 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments. The script should be easily modifiable for non-PowerScribe environments.
+
 It works by highlighting text in PowerScribe360 as installed at the authors institution or NotePad for troubleshooting.
+
+If a user desires OCR of coronary calcium scoring, download Vis2 OCR for AHK. https://github.com/iseahound/Vis2 - Follow instructions in header for Radiology Right Click v1.03.ahk
 
 The user highlights text and right clicks with the mouse. A new right click menu appears in PowerScribe or NotePad with various useful functions. 
 The script can be paused to see the default right click menu for a specified time - 3 minutes default and up to 10 hours to turn off for an entire shift. 
