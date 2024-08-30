@@ -60,7 +60,6 @@ Pathway #2:
 
 Troubleshooting: 
 1) Ensure you are only running one instance of the script if there is unexpected behavior by going to the "Show Hidden Icons" in the Windows Task Bar and making sure only 1 green letter H is present. Exit duplicate instances as needed.
-2) Ensure your running instance of powerscribe has the same name as one of the options on line #92 in code. If you would like another program to have access, add it to that line.
 
 
 
