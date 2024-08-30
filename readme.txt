@@ -17,7 +17,7 @@ Suggested usage: make Powerscribe templates that match input of this script to e
 
 ## Author
 Created by an amateur programming enthusiast with a passion for radiology, in partnership with Claude, an AI assistant.
-Contributions for Fleischner by: Eric Van Bogaert (https://github.com/EricVanBogaert/AutoHotKey-for-Radiology)
+Contributions for Fleischner by: Eric Van Bogaert (https://github.com/EricVanBogaert/AutoHotKey-for-Radiology) who made an excellent AutoHotKey v2 script which was translated to v 1.1 by Claude v3.5 sonnet. 
 
 ## Features
 - Coronary Artery Calcium Score Percentile Calculator (MESA and Hoff methods)
