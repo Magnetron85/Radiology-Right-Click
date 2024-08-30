@@ -75,7 +75,7 @@ This project is currently in testing and development. We are aware of several ar
 ## Sample Inputs (Highlight this text in NotePad or PowerScribe, right click while highlighted). 
 
 ### Calcium Score Percentile
-Description: calculates  age and sex matched coronary artery calcifiction percentile (Hoff dataset). Also takes into account race if provided (MESA dataset; races supported based on MESA: Black, Chinese, Hispanic and White). The MESA data set currently requires an external call to their website to obtain the percentile information. The function also calculates arterial age.
+Description: calculates  age and sex matched coronary artery calcifiction percentile (Hoff dataset). Also takes into account race if provided (MESA dataset; races supported based on MESA: Black, Chinese, Hispanic and White). The MESA data set currently requires an external call to their website to obtain the percentile information; this could be blocked based on security protocols. If that is the case, leave out race and Hoff is used. The function also calculates arterial age (can be turned off in preferences).
 ```
 Age: 56
 Sex: Male
