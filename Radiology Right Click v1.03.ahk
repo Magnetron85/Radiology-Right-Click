@@ -1,14 +1,10 @@
 ; ==========================================
 ; Radiologist's Helper Script
 ; Radiology Right Click
-; Version: 1.03
+; Version: 1.04
 ; Description: This AutoHotkey script provides various calculation tools and utilities
 ;              for radiologists, including volume calculations, date estimations,
 ;              and statistical analysis of measurements.
-;  
-; Dependencies: Vis2 OCR - Download https://github.com/iseahound/Vis2
-;               Place compiled Radiology Right Click v1.03.exe in same folder as Vis2 lib and bin folders. 
-;               This will allow coronary calcium OCR from table in Syngo.Via
 ; ==========================================
 
 #NoEnv
@@ -45,6 +41,14 @@ global ResultText
 global InvisibleControl
 global originalMouseX, originalMouseY
 global ScanDate, ScanTime, PremedProtocol
+global ShowFleischnerCriteria := true
+global g_Nodules := []
+global g_FleischnerNodules := []
+global g_ShowFleischnerCitation := false
+global g_ShowFleischnerExclusions := false
+
+
+
 
 ;======== Global variables for for OCR
 global g_arteryNames := {"lm": "Left Main"
@@ -94,6 +98,7 @@ LoadPreferencesFromFile() {
 		IniRead, ShowCitations, %preferencesFile%, Display, ShowCitations, 1
 		IniRead, ShowArterialAge, %preferencesFile%, Display, ShowArterialAge, 1
 		IniRead, ShowContrastPremedication, %preferencesFile%, Calculations, ShowContrastPremedication, 1
+		IniRead, ShowFleischnerCriteria, %preferencesFile%, Calculations, ShowFleischnerCriteria, 1
     } else {
         MsgBox, Preferences file not found: %preferencesFile%. File will be created if preferences are edited.
     }
@@ -234,6 +239,9 @@ CreateCustomMenu() {
     if (ShowContrastPremedication) {
         Menu, CustomMenu, Add, Calculate Contrast Premedication, CalculateContrastPremedication
     }
+	if (ShowFleischnerCriteria) {
+    Menu, CustomMenu, Add, Calculate Fleischner Criteria, CalculateFleischnerCriteria
+	}
     Menu, CustomMenu, Add
     Menu, CustomMenu, Add, Pause Script, PauseScript
     Menu, CustomMenu, Add, Preferences, ShowPreferences
@@ -350,6 +358,11 @@ return
 
 CompareNoduleSizes:
     Result := CompareNoduleSizes(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateFleischnerCriteria:
+    Result := ProcessNodule(g_SelectedText)
     ShowResult(Result)
 return
 
@@ -1322,7 +1335,8 @@ ShowPreferences() {
     Gui, Add, Checkbox, x10 y420 w200 vShowCitations Checked%ShowCitations%, Show Citations in Output
     Gui, Add, Checkbox, x10 y450 w200 vShowArterialAge Checked%ShowArterialAge%, Show Arterial Age
 	Gui, Add, Checkbox, x10 y480 w200 vShowContrastPremedication Checked%ShowContrastPremedication%,  Contrast Premedication
-	Gui, Add, Text, x10 y520 w200, Pause Duration (current: %currentPauseDuration%):
+	Gui, Add, Checkbox, x10 y510 w200 vShowFleischnerCriteria Checked%ShowFleischnerCriteria%, Fleischner Criteria
+	Gui, Add, Text, x10 y550 w200, Pause Duration (current: %currentPauseDuration%):
     Gui, Add, DropDownList, x10 y560 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
     if (PauseDuration = 180000)
         GuiControl, Choose, PauseDurationChoice, 1
@@ -1334,9 +1348,9 @@ ShowPreferences() {
         GuiControl, Choose, PauseDurationChoice, 4
     else if (PauseDuration = 36000000)
         GuiControl, Choose, PauseDurationChoice, 5
-    Gui, Add, Button, x60 y600 w100 gSavePreferences, Save
+    Gui, Add, Button, x60 y640 w100 gSavePreferences, Save
     
-    Gui, Show, w220 h660
+    Gui, Show, w220 h700
 }
 
 
@@ -1390,6 +1404,7 @@ SavePreferencesToFile() {
     IniWrite, %DarkMode%, %A_ScriptDir%\preferences.ini, Display, DarkMode
 	IniWrite, %ShowCalciumScorePercentile%, %A_ScriptDir%\preferences.ini, Calculations, ShowCalciumScorePercentile
 	IniWrite, %ShowContrastPremedication%, %A_ScriptDir%\preferences.ini, Calculations, ShowContrastPremedication
+	IniWrite, %ShowFleischnerCriteria%, %A_ScriptDir%\preferences.ini, Calculations, ShowFleischnerCriteria
 }
 
 PreferencesGuiClose:
@@ -2309,7 +2324,7 @@ LevenshteinDistance(s, t) {
 
 CaptureCalciumScore() {
     text := OCR()
-    
+
     if (text == "")
         return {report: "No text captured", warning: ""}
 
@@ -2324,8 +2339,18 @@ CaptureCalciumScore() {
 ParseCalciumScore(text) {
     global g_arteryNames, g_levenshteinThreshold
     lines := StrSplit(RegExReplace(text, "\r\n|\r|\n", "`n"), "`n")
+    
+    ; Detect Region Agatston format using Levenshtein distance
+    if (IsLikelyRegionAgatston(lines[1])) {
+        return ParseFlexibleRegionAgatston(lines)
+    }
+    
+    ; Existing code for the original format starts here
     scoreData := {}
-    isRegionAgatston := InStr(lines[1], "Region") && InStr(lines[1], "Agatston")
+    arteries := []
+    scores := []
+    inArterySection := false
+    inScoreSection := false
     ocrTotal := 0
 
     if (isRegionAgatston) {
@@ -2416,53 +2441,135 @@ ParseCalciumScore(text) {
     return {report: formattedReport, warning: warningMessage}
 }
 
-
-PreprocessRegionAgatston(text) {
-    lines := StrSplit(text, "`n")
-    processedText := "Region`n"
-    agatstonIndex := 0
-   
-	
-    ; Find the Agatston column index
-    headerParts := StrSplit(lines[1], A_Tab)
-    Loop, % headerParts.Length()
-    {
-        if (InStr(headerParts[A_Index], "Agatston")) {
-            agatstonIndex := A_Index
-            break
-        }
-    }
-    
-    if (agatstonIndex = 0)
-        return text  ; Return original text if Agatston column not found
-    
-    ; Process each line
-    for index, line in lines {
-        if (index = 1)
-            continue  ; Skip header
-        
-        parts := StrSplit(line, A_Tab)
-        if (parts.Length() >= agatstonIndex) {
-            processedText .= parts[1] . "`n"  ; Region name
-        }
-    }
-    
-    processedText .= "Agatston`n"
-    
-    ; Add Agatston scores
-    for index, line in lines {
-        if (index = 1)
-            continue  ; Skip header
-        
-        parts := StrSplit(line, A_Tab)
-        if (parts.Length() >= agatstonIndex) {
-            processedText .= parts[agatstonIndex] . "`n"  ; Agatston score
-        }
-    }
-    
-    return processedText
+IsLikelyRegionAgatston(headerLine) {
+    return (LevenshteinDistance(headerLine, "Region Agatston Volume (mm3) Mass (mg)") <= 5)
 }
 
+ParseFlexibleRegionAgatston(lines) {
+    scoreData := {}
+    ocrTotal := 0
+
+    for index, line in lines {
+        if (index == 1) ; Skip header
+            continue
+        
+        parts := StrSplit(Trim(line), A_Space)
+        if (parts.Length() >= 2) {
+            arteryName := ""
+            score := 0
+            scoreIndex := 0
+            
+            ; Find the first valid artery name and the corresponding score
+            for i, part in parts {
+                if (arteryName == "" && FindBestMatch(part, g_arteryNames)) {
+                    arteryName := part
+                } else if (arteryName != "" && IsNumeric(part)) {
+                    score := Ceil(part + 0)
+                    scoreIndex := i
+                    break
+                }
+            }
+            
+            ; If no score found after artery name, check the column right after artery name
+            if (score == 0 && scoreIndex == 0 && arteryName != "") {
+                arteryIndex := 0
+                for i, part in parts {
+                    if (part == arteryName) {
+                        arteryIndex := i
+                        break
+                    }
+                }
+                if (arteryIndex > 0 && parts.Length() > arteryIndex) {
+                    potentialScore := parts[arteryIndex + 1]
+                    if (IsNumeric(potentialScore)) {
+                        score := Ceil(potentialScore + 0)
+                    }
+                }
+            }
+            
+            mappedName := FindBestMatch(arteryName, g_arteryNames)
+            if (mappedName && mappedName != "Total") {
+                scoreData[mappedName] := score
+            } else if (mappedName == "Total" || LevenshteinDistance(arteryName, "Total") <= 2) {
+                ocrTotal := score
+            }
+        }
+    }
+
+    ; Ensure main arteries are always present
+    mainArteries := ["Left Main", "Left Anterior Descending", "Left Circumflex", "Right Coronary", "Posterior Descending Artery"]
+    for _, artery in mainArteries {
+        if (!scoreData.HasKey(artery)) {
+            scoreData[artery] := 0
+        }
+    }
+
+    ; Calculate total
+    calculatedTotal := 0
+    for _, score in scoreData {
+        calculatedTotal += score
+    }
+
+    ; Use OCR total if available and different from calculated total
+    if (ocrTotal > 0 && ocrTotal != calculatedTotal) {
+        calculatedTotal := ocrTotal
+    }
+
+    ; Check if the calculated total is significantly different from OCR total
+    warningMessage := ""
+    if (ocrTotal > 0 && Abs(calculatedTotal - ocrTotal) > 2) {
+        warningMessage := "Warning: Calculated total (" . calculatedTotal . ") differs from OCR total (" . ocrTotal . ") by more than 2 Agatston units. Please review the scores."
+    }
+
+    formattedReport := FormatCalciumScoreReport(scoreData, calculatedTotal)
+    return {report: formattedReport, warning: warningMessage}
+}
+
+ParseRegionAgatston(lines) {
+    scoreData := {}
+    ocrTotal := 0
+
+    for index, line in lines {
+        if (index == 1) ; Skip header
+            continue
+        
+        parts := StrSplit(Trim(line), A_Space)
+        if (parts.Length() >= 2) {
+            arteryName := parts[1]
+            score := Ceil(parts[2] + 0) ; Agatston score, rounded up
+            
+            mappedName := FindBestMatch(arteryName, g_arteryNames)
+            if (mappedName && mappedName != "Total") {
+                scoreData[mappedName] := score
+            } else if (mappedName == "Total") {
+                ocrTotal := score
+            }
+        }
+    }
+
+    ; Ensure main arteries are always present
+    mainArteries := ["Left Main", "Left Anterior Descending", "Left Circumflex", "Right Coronary"]
+    for _, artery in mainArteries {
+        if (!scoreData.HasKey(artery)) {
+            scoreData[artery] := 0
+        }
+    }
+
+    ; Calculate total
+    calculatedTotal := 0
+    for _, score in scoreData {
+        calculatedTotal += score
+    }
+
+    ; Check if the calculated total is significantly different from OCR total
+    warningMessage := ""
+    if (ocrTotal > 0 && Abs(calculatedTotal - ocrTotal) > 2) {
+        warningMessage := "Warning: Calculated total (" . calculatedTotal . ") differs from OCR total (" . ocrTotal . ") by more than 2 Agatston units. Please review the scores."
+    }
+
+    formattedReport := FormatCalciumScoreReport(scoreData, calculatedTotal)
+    return {report: formattedReport, warning: warningMessage}
+}
 
 FindBestMatch(name, dictionary) {
     global g_levenshteinThreshold
@@ -2479,23 +2586,6 @@ FindBestMatch(name, dictionary) {
     return (minDistance <= g_levenshteinThreshold) ? bestMatch : ""
 }
 
-CreateArteryRegexPattern() {
-    pattern := "im)^.*?(?="  ; Start of line, non-greedy match up to...
-    for key, _ in g_arteryNames {
-        pattern .= RegExEscape(key) . "|"  ; Add each artery name as an alternative
-    }
-    return RTrim(pattern, "|") . ")"  ; Remove trailing | and close the lookahead
-}
-
-RemoveArteryPrefixes(text) {
-    pattern := CreateArteryRegexPattern()
-    return RegExReplace(text, pattern, "")
-}
-
-; Helper function to escape regex special characters
-RegExEscape(str) {
-    return RegExReplace(str, "([\\.\*\?\+\[\{\|\(\)\^\$])", "\$1")
-}
 
 FormatCalciumScoreReport(scoreData, calculatedTotal) {
     result := "Calcium Score Report:`n`n"
@@ -2518,36 +2608,6 @@ FormatCalciumScoreReport(scoreData, calculatedTotal) {
     return result
 }
 
-ExtractArteryAndScore(line, ByRef arteryName, ByRef score) {
-    arteryName := ""
-    score := ""
-    parts := StrSplit(Trim(line), A_Space)
-    
-    ; Find the part that matches an artery name
-    Loop, % parts.Length()
-    {
-        currentPart := parts[A_Index]
-        if (FindBestMatch(currentPart, g_arteryNames) != "") {
-            arteryName := currentPart
-            ; Look for the first number after the artery name
-            Loop, % parts.Length() - A_Index
-            {
-                if (parts[A_Index + A_Index] is number) {
-                    score := parts[A_Index + A_Index]
-                    break
-                }
-            }
-            break
-        }
-    }
-}
-HasTotal(scoreData) {
-    for _, data in scoreData {
-        if (data.name == "Total" || data.name == "Total Agatston Score")
-            return true
-    }
-    return false
-}
 
 FindKeyForValue(dictionary, value) {
     for key, val in dictionary {
@@ -2565,19 +2625,6 @@ HasValue(arr, value) {
     return false
 }
 
-HasKey(arr, key) {
-    for _, item in arr {
-        if (item.name = key)
-            return true
-    }
-    return false
-}
-
-; Helper function to pad strings to the right
-PadRight(str, totalLength) {
-    return str . SubStr("                         ", 1, totalLength - StrLen(str))
-}
-
 ShowCalciumScore(result) {
     ShowResult(result.report)
     if (result.warning != "") {
@@ -2585,6 +2632,9 @@ ShowCalciumScore(result) {
     }
 }
 
+IsNumeric(str) {
+    return RegExMatch(str, "^\d+(\.\d+)?$")
+}
 
 ; Example usage:
 ^!c::  ; Ctrl+Alt+C hotkey
@@ -2605,7 +2655,183 @@ IsExcludedLine(line) {
     return false
 }
 
-; =============
+; ============= END
+
+; =========== FLEISCHNER 2017
+class Nodule {
+    __New(nString) {
+        this.Num := "single"
+        this.Composition := ""
+        this.Calcified := false
+        this.mString := ""
+        this.Units := ""
+        this.Measurements := []
+
+        if (!InStr(nString, "nodule") and !InStr(nString, "nodules"))
+            throw Exception("No nodule reference", -1)
+        
+        nString := RTrim(nString, ".")
+        StringReplace, nString, nString, `,, , All
+        
+        Loop, Parse, nString, %A_Space%
+        {
+            if (A_LoopField = "nodules")
+                this.Num := "multiple"
+            
+            if (A_LoopField = "solid") {
+                if (this.Composition = "")
+                    this.Composition := "solid"
+                if (this.Composition = "ground glass")
+                    this.Composition := "part solid"
+            }
+            
+            if ((A_LoopField = "ground" and A_LoopField = "glass") or A_LoopField = "groundglass") {
+                if (this.Composition = "")
+                    this.Composition := "ground glass"
+                if (this.Composition = "solid")
+                    this.Composition := "part solid"
+            }
+            
+            if ((A_LoopField = "part" and A_LoopField = "solid") or A_LoopField = "part-solid") {
+                this.Composition := "part solid"
+            }
+            
+            if (A_LoopField = "calcified" or A_LoopField = "calcification" or A_LoopField = "calcifications")
+                this.Calcified := true
+            
+            if (A_LoopField = "noncalcified" or A_LoopField = "non-calcified")
+                this.Calcified := false
+        }
+
+        needle := "i)(\d+(?:\.\d+)?)(?:\s*x\s*(\d+(?:\.\d+)?))?(?:\s*x\s*(\d+(?:\.\d+)?))?\s?([cm]m)"
+        
+        if (RegExMatch(nString, needle, match)) {
+            this.mString := match
+            this.Units := match4
+            Loop, 3 {
+                if match%A_Index% is number
+                    this.Measurements.Push(match%A_Index%)
+            }
+        }
+        else {
+            throw Exception("No measurements found", -2)
+        }
+    }
+
+    Size() {
+        if (this.Measurements.Length() = 1)
+            s := this.Measurements[1]
+        else if (this.Measurements.Length() = 2)
+            s := (this.Measurements[1] + this.Measurements[2]) / 2
+        else if (this.Measurements.Length() = 3) {
+            s1 := this.Measurements[1]
+            s2 := this.Measurements[2]
+            if (this.Measurements[3] > s1)
+                s1 := this.Measurements[3]
+            else if (this.Measurements[3] > s2)
+                s2 := this.Measurements[3]
+            s := (s1 + s2) / 2
+        }
+
+        if (this.Units = "cm")
+            s *= 10
+
+        return s
+    }
+
+    Category() {
+        s := this.Size()
+
+        if (this.Composition = "solid" or this.Composition = "") {
+            if (this.Num = "single") {
+                if (s < 6)
+                    c := 1
+                else if (s >= 6 and s <= 8)
+                    c := 2
+                else if (s > 8)
+                    c := 3
+            } else {
+                if (s < 6)
+                    c := 1
+                else if (s >= 6)
+                    c := 6
+            }
+        } else {
+            if (this.Num = "multiple") {
+                if (s < 6)
+                    c := 7
+                else if (s >= 6)
+                    c := 8
+            } else {
+                if (this.Composition = "ground glass") {
+                    if (s < 6)
+                        c := 0
+                    else if (s >= 6)
+                        c := 4
+                }
+
+                if (this.Composition = "part solid") {
+                    if (s < 6)
+                        c := 0
+                    else if (s >= 6)
+                        c := 5
+                }
+            }
+        }
+
+        if (this.Calcified)
+            c := 0
+
+        return c
+    }
+
+    Recommendation() {
+        c := this.Category()
+        if (c = 0)
+            return "No routine follow-up is indicated."
+        else if (c = 1)
+            return "If the patient carries a high risk for lung cancer, consider follow-up CT in 12 months."
+        else if (c = 2)
+            return "CT in 6-12 months. If the patient carries a high risk for lung cancer, recommend additional CT at 18-24 months."
+        else if (c = 3)
+            return "CT at 3 months, PET/CT, or tissue sampling."
+        else if (c = 4)
+            return "CT in 6-12 months to confirm persistence, then CT every 2 years until 5 years."
+        else if (c = 5)
+            return "CT in 3-6 months to confirm persistence. If unchanged and solid component remains <6mm, annual CT should be performed for 5 years."
+        else if (c = 6)
+            return "CT in 3-6 months. If the patient carries a high risk for lung cancer, recommend additional CT at 18-24 months."
+        else if (c = 7)
+            return "CT in 3-6 months. If stable, consider CT at 2 and 4 years."
+        else if (c = 8)
+            return "CT in 3-6 months. Subsequent management based on the most suspicious nodule."
+    }
+}
+
+ProcessNodule(nString) {
+    try {
+        n := new Nodule(nString)
+    } catch e {
+        return "Error: " . e.message . "`nSample syntax: 3 x 2 x 1 cm solid nodule"
+    }
+
+    result := nString . "`n`n"
+    result .= "Fleischner Society 2017 Guidelines:`n"
+    result .= "Multiplicity: " . n.Num . "`n"
+    result .= "Composition: " . n.Composition . "`n"
+    result .= "Calcification: " . (n.Calcified ? "calcified" : "noncalcified") . "`n"
+    result .= "Measurements (axial): " . n.mString . "`n"
+    result .= "Size (Fleischner): " . Format("{:.1f} ", n.Size()) . "mm`n`n"
+    result .= "Recommendation: " . n.Recommendation()
+
+    if (ShowCitations) {
+        result .= "`n`nCitation: MacMahon H, Naidich DP, Goo JM, et al. Guidelines for Management of Incidental Pulmonary Nodules Detected on CT Images: From the Fleischner Society 2017. Radiology. 2017;284(1):228-243. doi:10.1148/radiol.2017161659"
+    }
+
+    return result
+}
+
+;==============end flesichner
 
 ^!p::ShowPreferences()
 
