@@ -6,7 +6,7 @@ Radiology Right Click v1.04 is a radiologist's quantitative friend, designed to 
 
 It works by highlighting text in PowerScribe360 as installed at the authors institution or NotePad for troubleshooting.
 
-If a user desires OCR of coronary calcium scoring, download Vis2 OCR for AHK. https://github.com/iseahound/Vis2. If do not desire, can disable in preferences. Download this and place in same folder as the Right Click excecutable file.
+If a user desires OCR of coronary calcium scoring, download Vis2 OCR for AHK. https://github.com/iseahound/Vis2. If do not desire, can disable in preferences. May need to be downloaded to prevent compiler error if you are compiling the script rather than downloading the executible file. Download from the line and place in same folder as the Right Click excecutable file.
 
 The user highlights text and right clicks with the mouse. A new right click menu appears in PowerScribe or NotePad with various useful functions. 
 The script can be paused to see the default right click menu for a specified time - 3 minutes default and up to 10 hours to turn off for an entire shift. 
