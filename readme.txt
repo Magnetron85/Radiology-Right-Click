@@ -1,12 +1,12 @@
-# Radiology Right Click v1.02
+# Radiology Right Click v1.04
 (c) 2024, GitHub user Magnetron85
 
 ## Description
-Radiology Right Click v1.02 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments. The script should be easily modifiable for non-PowerScribe environments.
+Radiology Right Click v1.04 is a radiologist's quantitative friend, designed to improve quantitative radiology and streamline workflow. This AutoHotkey script provides a suite of tools accessible via right-click in PowerScribe at the point of dictation, offering quick calculations and reference information for various radiological measurements and assessments. The script should be easily modifiable for non-PowerScribe environments.
 
 It works by highlighting text in PowerScribe360 as installed at the authors institution or NotePad for troubleshooting.
 
-If a user desires OCR of coronary calcium scoring, download Vis2 OCR for AHK. https://github.com/iseahound/Vis2 - Follow instructions in header for Radiology Right Click v1.03.ahk
+If a user desires OCR of coronary calcium scoring, download Vis2 OCR for AHK. https://github.com/iseahound/Vis2. If do not desire, can disable in preferences. Download this and place in same folder as the Right Click excecutable file.
 
 The user highlights text and right clicks with the mouse. A new right click menu appears in PowerScribe or NotePad with various useful functions. 
 The script can be paused to see the default right click menu for a specified time - 3 minutes default and up to 10 hours to turn off for an entire shift. 
@@ -17,6 +17,7 @@ Suggested usage: make Powerscribe templates that match input of this script to e
 
 ## Author
 Created by an amateur programming enthusiast with a passion for radiology, in partnership with Claude, an AI assistant.
+Contributions for Fleischner by: Eric Van Bogaert (https://github.com/EricVanBogaert/AutoHotKey-for-Radiology)
 
 ## Features
 - Coronary Artery Calcium Score Percentile Calculator (MESA and Hoff methods)
@@ -32,8 +33,8 @@ Created by an amateur programming enthusiast with a passion for radiology, in pa
 - Nodule Size Comparison and Sorting (Sorting takes in 3 comma separated numbers and returns in descending order separated by x to improve formatting of ModLink fields containing 3 comma separated values).
 - Number statistics
 - Measurement formatting correction 
-
-
+- OCR for coronary calcium scoring (BETA) - Tested with syngo.via. 
+- Fleischner 2017 recomendations on per nodule basis.
 
 
 ## Usage and Installation
@@ -228,6 +229,21 @@ Returns various statistics meaningful to daily practice. More statistics are ret
 User enters date and time of scan in GUI (defaulted to 13 hours in future). Function returns time, medication and dosage for contrast allergy premedication per ACR contrast manual.
 
 
+### Calculate Fleischner
+Adapted from https://github.com/EricVanBogaert/AutoHotKey-for-Radiology. Thank you Eric Van Bogaert! 
+To use, highlight a sentence in a radiology report and right click. It will display a message box with nodule descriptors and copy the recommendation into the report at the end of the highlighted sentence.
+
+This uses a heuristic approach to analyzing the language, so it may not work for all cases. Some important caveats:
+- It accepts 1-3 measurements separated by "x" with optional spaces. Must have "mm" or "cm" at the end e.g. 1.0 x 2.0 x 3.0 cm, 1.0x2.0 mm, or 1 mm
+- It will always use the single number or average of the two largest measurements for Fleischner category. 
+- It will always categoirize a calcified nodule as benign and not recommend follow-up
+- If the sentence contains "solid" and "ground glass" descriptors, it will consider it a part-solid nodule
+
+Examples of well-formed sentences:
+"Incidental right upper lobe solid noncalcified pulmonary nodule measuring 7 x 8 mm (series 1, image 30)."
+"Multiple bilateral groundglass pulmonary nodules, largest measuring 1.5 x 1.5 cm in the left lower lobe."
+"Part solid nodule in the right middle lobe with groundglass and solid components. 
+    The solid component measures 6 x 4 x 8 mm."
 
 
 ## Contributions
