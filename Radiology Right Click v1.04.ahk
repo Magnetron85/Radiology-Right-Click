@@ -1,7 +1,7 @@
 ; ==========================================
 ; Radiologist's Helper Script
 ; Radiology Right Click
-; Version: 1.04
+; Version: 1.02
 ; Description: This AutoHotkey script provides various calculation tools and utilities
 ;              for radiologists, including volume calculations, date estimations,
 ;              and statistical analysis of measurements.
@@ -46,6 +46,7 @@ global g_Nodules := []
 global g_FleischnerNodules := []
 global g_ShowFleischnerCitation := false
 global g_ShowFleischnerExclusions := false
+global recommendations := {}
 
 
 
@@ -124,6 +125,7 @@ LoadPreferencesFromFile() {
 }
 
 LoadPreferencesFromFile()
+InitializeRecommendations() ; Make sure to call this function before using the Nodule class -- used for fleischner
 
 ; ==========================================
 ; Main Script Logic
@@ -362,7 +364,7 @@ CompareNoduleSizes:
 return
 
 CalculateFleischnerCriteria:
-    Result := ProcessNodule(g_SelectedText)
+    Result := ProcessNodules(g_SelectedText)
     ShowResult(Result)
 return
 
@@ -2660,177 +2662,459 @@ IsExcludedLine(line) {
 ; =========== FLEISCHNER 2017
 class Nodule {
     __New(nString) {
-        this.Num := "single"
+        this.Description := nString
         this.Composition := ""
         this.Calcified := false
         this.mString := ""
         this.Units := ""
         this.Measurements := []
+        this.HighRisk := false
+        this.Location := ""
+        this.Multiplicity := "single"
+        this.Perifissural := false
+        this.Morphology := ""
+        this.GlobalHighRisk := false
+		
 
-        if (!InStr(nString, "nodule") and !InStr(nString, "nodules"))
+        if (!this.ContainsNoduleReference(nString))
             throw Exception("No nodule reference", -1)
         
-        nString := RTrim(nString, ".")
-        StringReplace, nString, nString, `,, , All
-        
-        Loop, Parse, nString, %A_Space%
-        {
-            if (A_LoopField = "nodules")
-                this.Num := "multiple"
+        this.ParseNoduleProperties(nString)
+        this.ExtractMeasurements(nString)
+    }
+
+    ContainsNoduleReference(nString) {
+        noduleTerms := ["nodule", "nodules", "mass", "masses", "opacity", "opacities", "lesion", "lesions", "micronodule", "micronodules"]
+        for _, term in noduleTerms {
+            if (InStr(nString, term))
+                return true
+        }
+        return false
+    }
+
+     ParseNoduleProperties(nString) {
+        words := StrSplit(nString, A_Space)
+        for index, word in words {
+            if (this.IsMultiplicityWord(word))
+                this.Multiplicity := "multiple"
             
-            if (A_LoopField = "solid") {
+            if (this.FuzzyMatch(word, "solid")) {
                 if (this.Composition = "")
                     this.Composition := "solid"
-                if (this.Composition = "ground glass")
+                else if (this.Composition = "ground glass")
                     this.Composition := "part solid"
             }
             
-            if ((A_LoopField = "ground" and A_LoopField = "glass") or A_LoopField = "groundglass") {
+            if (this.FuzzyMatch(word, "ground") and index < words.Length() and this.FuzzyMatch(words[index+1], "glass")) {
                 if (this.Composition = "")
                     this.Composition := "ground glass"
-                if (this.Composition = "solid")
+                else if (this.Composition = "solid")
                     this.Composition := "part solid"
             }
             
-            if ((A_LoopField = "part" and A_LoopField = "solid") or A_LoopField = "part-solid") {
+            if (this.FuzzyMatch(word, "groundglass")) {
+                if (this.Composition = "")
+                    this.Composition := "ground glass"
+                else if (this.Composition = "solid")
+                    this.Composition := "part solid"
+            }
+            
+            if ((this.FuzzyMatch(word, "part") and index < words.Length() and this.FuzzyMatch(words[index+1], "solid")) 
+                or this.FuzzyMatch(word, "part-solid") or this.FuzzyMatch(word, "partsolid")) {
                 this.Composition := "part solid"
             }
             
-            if (A_LoopField = "calcified" or A_LoopField = "calcification" or A_LoopField = "calcifications")
+            if (this.FuzzyMatch(word, "calcified") or this.FuzzyMatch(word, "calcification") or this.FuzzyMatch(word, "calcifications"))
                 this.Calcified := true
             
-            if (A_LoopField = "noncalcified" or A_LoopField = "non-calcified")
+            if (this.FuzzyMatch(word, "noncalcified") or this.FuzzyMatch(word, "non-calcified"))
                 this.Calcified := false
-        }
 
-        needle := "i)(\d+(?:\.\d+)?)(?:\s*x\s*(\d+(?:\.\d+)?))?(?:\s*x\s*(\d+(?:\.\d+)?))?\s?([cm]m)"
-        
+            if (this.FuzzyMatch(word, "emphysema") or this.FuzzyMatch(word, "fibrosis"))
+                this.GlobalHighRisk := true
+
+            lobeKeywords := ["upper", "middle", "lower", "lingula", "apical", "basal"]
+            for _, keyword in lobeKeywords {
+                if (this.FuzzyMatch(word, keyword)) {
+                    this.Location .= " " . word
+                }
+            }
+            if (this.FuzzyMatch(word, "right") or this.FuzzyMatch(word, "left")) {
+                this.Location .= " " . word
+            }
+
+            if (this.FuzzyMatch(word, "perifissural") or this.FuzzyMatch(word, "fissure"))
+                this.Perifissural := true
+
+            morphologyKeywords := ["spiculated", "lobulated", "irregular", "smooth"]
+            for _, keyword in morphologyKeywords {
+                if (this.FuzzyMatch(word, keyword)) {
+                    this.Morphology := keyword
+                    break
+                }
+            }
+        }
+        this.Location := Trim(this.Location)
+
+        if (InStr(nString, "multiple") or InStr(nString, "several") or InStr(nString, "numerous"))
+            this.Multiplicity := "multiple"
+    }
+
+    IsMultiplicityWord(word) {
+        multiplicityWords := ["nodules", "multiple", "several", "few", "numerous", "masses", "opacities", "lesions", "micronodules"]
+        for _, w in multiplicityWords {
+            if (this.FuzzyMatch(word, w))
+                return true
+        }
+        return false
+    }
+
+    FuzzyMatch(word1, word2, threshold := 2) {
+        return (LevenshteinDistance(word1, word2) <= threshold)
+    }
+
+    ExtractMeasurements(nString) {
+        needle := "i)(\d+(?:\.\d+)?)\s*(?:x\s*(\d+(?:\.\d+)?))?\s*(?:x\s*(\d+(?:\.\d+)?))?\s*([cm]m)"
         if (RegExMatch(nString, needle, match)) {
             this.mString := match
             this.Units := match4
             Loop, 3 {
-                if match%A_Index% is number
+                if (match%A_Index% != "")
                     this.Measurements.Push(match%A_Index%)
             }
         }
         else {
-            throw Exception("No measurements found", -2)
+            needle := "i)(?:up to|approximately|about|~)?\s*(\d+(?:\.\d+)?)\s*([cm]m)"
+            if (RegExMatch(nString, needle, match)) {
+                this.mString := match
+                this.Units := match2
+                this.Measurements.Push(match1)
+            }
+            else if (InStr(nString, "micronodule") or InStr(nString, "micronodules")) {
+                ; Default size for micronodules when no measurement is given
+                this.mString := "5 mm"
+                this.Units := "mm"
+                this.Measurements.Push(5)
+            }
+            else {
+                throw Exception("No measurements found", -2)
+            }
         }
+        ; Store original measurements
+        this.OriginalMeasurements := this.Measurements.Clone()
+        this.OriginalUnits := this.Units
     }
 
-    Size() {
-        if (this.Measurements.Length() = 1)
-            s := this.Measurements[1]
-        else if (this.Measurements.Length() = 2)
-            s := (this.Measurements[1] + this.Measurements[2]) / 2
-        else if (this.Measurements.Length() = 3) {
-            s1 := this.Measurements[1]
-            s2 := this.Measurements[2]
-            if (this.Measurements[3] > s1)
-                s1 := this.Measurements[3]
-            else if (this.Measurements[3] > s2)
-                s2 := this.Measurements[3]
-            s := (s1 + s2) / 2
+
+   Size() {
+        if (this.Measurements.Length() = 0)
+            return 0
+        
+        totalSize := 0
+        for _, measurement in this.Measurements {
+            totalSize += measurement
         }
+        averageSize := totalSize / this.Measurements.Length()
 
+        ; Convert to mm if necessary
         if (this.Units = "cm")
-            s *= 10
+            return averageSize * 10  ; Convert cm to mm
+        return averageSize  ; Already in mm
+    }
+	
+	UpdateMString() {
+        if (this.OriginalMeasurements.Length() = 0)
+            return
 
-        return s
+        sizes := []
+        for _, measurement in this.OriginalMeasurements {
+            sizes.Push(Format("{:.1f}", measurement))
+        }
+        
+        this.mString := Join(sizes, " x ") . " " . this.OriginalUnits
     }
 
     Category() {
-        s := this.Size()
-
-        if (this.Composition = "solid" or this.Composition = "") {
-            if (this.Num = "single") {
+        s := this.Size()  ; s is now always in mm
+        
+        if (this.Composition == "solid" or this.Composition == "") {
+            if (this.Multiplicity == "multiple") {
                 if (s < 6)
-                    c := 1
+                    return "multiple_solid_small"
                 else if (s >= 6 and s <= 8)
-                    c := 2
-                else if (s > 8)
-                    c := 3
+                    return "multiple_solid_medium"
+                else
+                    return "multiple_solid_large"
             } else {
                 if (s < 6)
-                    c := 1
-                else if (s >= 6)
-                    c := 6
+                    return "single_solid_small"
+                else if (s >= 6 and s <= 8)
+                    return "single_solid_medium"
+                else
+                    return "single_solid_large"
             }
-        } else {
-            if (this.Num = "multiple") {
-                if (s < 6)
-                    c := 7
-                else if (s >= 6)
-                    c := 8
+        } else if (this.Composition == "ground glass") {
+            if (this.Multiplicity == "multiple") {
+				if (s < 6)
+					return "multiple_subsolid_small"
+				else
+					return "multiple_subsolid_large"
             } else {
-                if (this.Composition = "ground glass") {
-                    if (s < 6)
-                        c := 0
-                    else if (s >= 6)
-                        c := 4
-                }
-
-                if (this.Composition = "part solid") {
-                    if (s < 6)
-                        c := 0
-                    else if (s >= 6)
-                        c := 5
-                }
+                if (s < 6)
+                    return "single_gg_small"
+                else
+                    return "single_gg_large"
+            }
+        } else if (this.Composition == "part solid") {
+            if (this.Multiplicity == "multiple") {
+                if (s < 6)
+					return "multiple_subsolid_small"
+				else
+					return "multiple_subsolid_large"
+            } else {
+                if (s < 6)
+                    return "single_ps_small"
+                else
+                    return "single_ps_large"
             }
         }
-
-        if (this.Calcified)
-            c := 0
-
-        return c
     }
 
     Recommendation() {
-        c := this.Category()
-        if (c = 0)
-            return "No routine follow-up is indicated."
-        else if (c = 1)
-            return "If the patient carries a high risk for lung cancer, consider follow-up CT in 12 months."
-        else if (c = 2)
-            return "CT in 6-12 months. If the patient carries a high risk for lung cancer, recommend additional CT at 18-24 months."
-        else if (c = 3)
-            return "CT at 3 months, PET/CT, or tissue sampling."
-        else if (c = 4)
-            return "CT in 6-12 months to confirm persistence, then CT every 2 years until 5 years."
-        else if (c = 5)
-            return "CT in 3-6 months to confirm persistence. If unchanged and solid component remains <6mm, annual CT should be performed for 5 years."
-        else if (c = 6)
-            return "CT in 3-6 months. If the patient carries a high risk for lung cancer, recommend additional CT at 18-24 months."
-        else if (c = 7)
-            return "CT in 3-6 months. If stable, consider CT at 2 and 4 years."
-        else if (c = 8)
-            return "CT in 3-6 months. Subsequent management based on the most suspicious nodule."
+        category := this.Category()
+        risk := this.HighRisk ? "high" : "low"
+        
+        if (recommendations.HasKey(category)) {
+            if (IsObject(recommendations[category]))
+                return recommendations[category][risk]
+            else
+                return recommendations[category]
+        }
+        return "Unable to determine recommendation."
     }
 }
 
-ProcessNodule(nString) {
-    try {
-        n := new Nodule(nString)
-    } catch e {
-        return "Error: " . e.message . "`nSample syntax: 3 x 2 x 1 cm solid nodule"
+InitializeRecommendations() {
+    ObjRawSet(recommendations, "single_solid_small", {low: "No routine follow-up.", high: "Optional CT at 12 months."})
+    ObjRawSet(recommendations, "single_solid_medium", {low: "CT at 6-12 months, then consider CT at 18-24 months.", high: "CT at 6-12 months, then CT at 18-24 months."})
+    ObjRawSet(recommendations, "single_solid_large", {low: "Consider CT at 3 months, PET/CT, or tissue sampling.", high: "Consider CT at 3 months, PET/CT, or tissue sampling."})
+    ObjRawSet(recommendations, "multiple_solid_small", {low: "No routine follow-up.", high: "Optional CT at 12 months."})
+    ObjRawSet(recommendations, "multiple_solid_medium", {low: "CT at 3-6 months, then consider CT at 18-24 months.", high: "CT at 3-6 months, then at 18-24 months."})
+    ObjRawSet(recommendations, "multiple_solid_large", {low: "CT at 3-6 months, then consider CT at 18-24 months.", high: "CT at 3-6 months, then at 18-24 months."})
+    ObjRawSet(recommendations, "single_gg_small", "No routine follow-up.")
+    ObjRawSet(recommendations, "single_gg_large", "CT at 6-12 months to confirm persistence, then every 2 years until 5 years.")
+    ObjRawSet(recommendations, "single_ps_small", "No routine follow-up.")
+    ObjRawSet(recommendations, "single_ps_large", "CT at 3-6 months to confirm persistence. If unchanged and solid component remains <6mm, annual CT should be performed for 5 years.")
+    ObjRawSet(recommendations, "multiple_subsolid_small", "CT at 3-6 months. If stable, consider CT at 2 and 4 years.")
+	ObjRawSet(recommendations, "multiple_subsolid_large", "CT at 3-6 months. Subsequent management based on the most suspicious nodule(s).")
+}
+
+Join(arr, sep) {
+    result := ""
+    for index, element in arr {
+        if (index > 1)
+            result .= sep
+        result .= element
+    }
+    return result
+}
+
+ProcessNodules(text) {
+    nodules := []
+    globalHighRisk := CheckHighRiskConditions(text)
+
+    ; Calculate the probability of multiple nodules
+    multipleNodulesProbability := CalculateMultipleNodulesProbability(text)
+    isMultiple := (multipleNodulesProbability >= 0.45)  ; Adjusted threshold
+
+    ; Split the input text into separate nodule descriptions
+    noduleDescriptions := SplitNoduleDescriptions(text)
+    
+    for _, description in noduleDescriptions {
+        try {
+            nodule := new Nodule(description)
+            nodule.GlobalHighRisk := globalHighRisk
+            nodule.Multiplicity := isMultiple ? "multiple" : "single"
+            nodules.Push(nodule)
+        } catch e {
+            ; Skip invalid nodule descriptions
+        }
     }
 
-    result := nString . "`n`n"
-    result .= "Fleischner Society 2017 Guidelines:`n"
-    result .= "Multiplicity: " . n.Num . "`n"
-    result .= "Composition: " . n.Composition . "`n"
-    result .= "Calcification: " . (n.Calcified ? "calcified" : "noncalcified") . "`n"
-    result .= "Measurements (axial): " . n.mString . "`n"
-    result .= "Size (Fleischner): " . Format("{:.1f} ", n.Size()) . "mm`n`n"
-    result .= "Recommendation: " . n.Recommendation()
-
-    if (ShowCitations) {
-        result .= "`n`nCitation: MacMahon H, Naidich DP, Goo JM, et al. Guidelines for Management of Incidental Pulmonary Nodules Detected on CT Images: From the Fleischner Society 2017. Radiology. 2017;284(1):228-243. doi:10.1148/radiol.2017161659"
+    if (nodules.Length() = 0) {
+        ; Check for general mention of micronodules
+        if (InStr(text, "micronodule") or InStr(text, "micronodules")) {
+            nodule := new Nodule("Default micronodule measuring 5 mm")
+            nodule.GlobalHighRisk := globalHighRisk
+            nodule.Multiplicity := isMultiple ? "multiple" : "single"
+            nodules.Push(nodule)
+        } else {
+            return "Error: No valid nodules found."
+        }
     }
+
+    mostSignificantNodule := nodules[1]
+    for _, nodule in nodules {
+        nodule.UpdateMString()  ; Update mString for each nodule
+        if (nodule.Size() > mostSignificantNodule.Size())
+            mostSignificantNodule := nodule
+    }
+    result := text . "`n`n"  ; Preserve input text at the top
+    result .= "Fleischner 2017 assessment:`n"
+    ; result .= "Prb: " . multipleNodulesProbability . "`n"  ; Display probability for debugging
+    if (isMultiple) {
+        result .= "Multiple pulmonary nodules are present. The most significant nodule forming the basis of follow-up:`n"
+    } else {
+        result .= "A solitary pulmonary nodule is described forming the basis of follow-up:`n"
+    }
+   
+    result .= "- Location: " . (mostSignificantNodule.Location ? mostSignificantNodule.Location : "Not specified") . "`n"
+    result .= "- Extracted Size: " . mostSignificantNodule.mString . "`n"
+    result .= "- Fleischner Size (mm): " . Format("{:.1f} mm", mostSignificantNodule.Size()) . "`n"
+    result .= "- Composition: " . (mostSignificantNodule.Composition ? mostSignificantNodule.Composition : "solid") . "`n"
+    if (mostSignificantNodule.Calcified)
+        result .= "- Calcification: Present`n"
+    if (mostSignificantNodule.Morphology)
+        result .= "- Morphology: " . mostSignificantNodule.Morphology . "`n"
+    
+   currentDate := A_Now
+
+    result .= "`nRECOMMENDATION:`n"
+    if (globalHighRisk) {
+        mostSignificantNodule.HighRisk := true
+        recommendation := mostSignificantNodule.Recommendation()
+        result .= AddFollowUpDates(recommendation, currentDate)
+    } else {
+        lowRiskRec := mostSignificantNodule.Recommendation()
+        result .= "For low-risk patients: " . AddFollowUpDates(lowRiskRec, currentDate) . "`n"
+        mostSignificantNodule.HighRisk := true
+        highRiskRec := mostSignificantNodule.Recommendation()
+        result .= "For high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate)
+    }
+
+    if (globalHighRisk)
+        result .= "`n`nNote: Patient has risk factors that may increase the risk of lung cancer."
+
+    if(ShowCitations)
+		result .= "`n`nCitation: MacMahon H, Naidich DP, Goo JM, et al. Guidelines for Management of Incidental Pulmonary Nodules Detected on CT Images: From the Fleischner Society 2017. Radiology. 2017;284(1):228-243. doi:10.1148/radiol.2017161659"
 
     return result
 }
 
+SplitNoduleDescriptions(text) {
+    descriptions := []
+    ; Regular expression to match nodule descriptions
+    ; This regex looks for sentences containing nodule-related terms and measurements
+    needle := "i)([^.]*(?:nodule|mass|opacity|lesion)[^.]*(?:\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))[^.]*\.?)"
+    pos := 1
+    while (pos := RegExMatch(text, needle, match, pos)) {
+        descriptions.Push(Trim(match1))
+        pos += StrLen(match)
+    }
+    
+    ; If no specific nodule descriptions found, check for general mentions of micronodules
+    if (descriptions.Length() = 0 and (InStr(text, "micronodule") or InStr(text, "micronodules"))) {
+        descriptions.Push(text)
+    }
+    
+    ; If still no descriptions found, return the entire text as one description
+    if (descriptions.Length() = 0) {
+        descriptions.Push(text)
+    }
+    
+    return descriptions
+}
+
+AddFollowUpDates(recommendation, currentDate) {
+    followUpPeriods := []
+    
+    if (InStr(recommendation, "3 months"))
+        followUpPeriods.Push({min: 90, max: 90, text: "3 months"})
+    if (InStr(recommendation, "6-12 months"))
+        followUpPeriods.Push({min: 180, max: 365, text: "6-12 months"})
+    if (InStr(recommendation, "18-24 months"))
+        followUpPeriods.Push({min: 540, max: 730, text: "18-24 months"})
+    
+    if (followUpPeriods.Length() > 0) {
+        recommendation .= "`nFollow-up dates:"
+        for _, period in followUpPeriods {
+            minDate := DateCalc(currentDate, period.min)
+            maxDate := DateCalc(currentDate, period.max)
+            FormatTime, formattedMinDate, %minDate%, MMMM yyyy
+            FormatTime, formattedMaxDate, %maxDate%, MMMM yyyy
+            if (formattedMinDate != formattedMaxDate)
+                recommendation .= "`n- " . period.text . ": " . formattedMinDate . " to " . formattedMaxDate
+            else
+                recommendation .= "`n- " . period.text . ": " . formattedMinDate
+        }
+    }
+    
+    return recommendation
+}
+
+CheckHighRiskConditions(text) {
+    StringLower text, text ; Convert to lowercase
+    highRiskTerms := ["emphysema", "fibrosis", "fibrotic", "emphysematous"]
+    
+    for _, term in highRiskTerms {
+        words := StrSplit(text, A_Space)
+        for _, word in words {
+            if (FuzzyMatchGlobal(word, term))
+                return true
+        }
+    }
+    return false
+}
+
+FuzzyMatchGlobal(word1, word2, threshold := 2) {
+    return (LevenshteinDistance(word1, word2) <= threshold)
+}
+
+CalculateMultipleNodulesProbability(text) {
+    probability := 0
+    
+    ; Check for explicit mentions of multiple nodules
+    if (InStr(text, "nodules") or InStr(text, "multiple") or InStr(text, "several") or InStr(text, "few"))
+        probability += 0.7
+    
+    ; Check for scattered micronodules
+    if (InStr(text, "scattered") and InStr(text, "micronodules"))
+        probability += 0.6
+    
+    ; Check for multiple measurements
+    measurementCount := 0
+    pos := 1
+    while (pos := RegExMatch(text, "i)(\d+(?:\.\d+)?\s*(mm|cm))", match, pos + StrLen(match)))
+        measurementCount++
+    
+    if (measurementCount > 1)
+        probability += 0.5  ; Increased weight for multiple measurements
+    
+    ; Check for multiple locations
+    lobeKeywords := ["upper", "middle", "lower", "lingula", "apical", "basal", "right", "left"]
+    uniqueLocations := {}
+    for _, keyword in lobeKeywords {
+        if (InStr(text, keyword))
+            uniqueLocations[keyword] := true
+    }
+    
+    if (uniqueLocations.Count() > 1)
+        probability += 0.3  ; Increased weight for multiple locations
+    
+    ; Count number of times "nodule" (singular) is mentioned
+    noduleCount := 0
+    pos := 1
+    while (pos := InStr(text, "nodule", false, pos))
+    {
+        noduleCount++
+        pos += 6  ; length of "nodule"
+    }
+    
+    if (noduleCount > 1)
+        probability += 0.4  ; Add probability if "nodule" is mentioned multiple times
+    
+    return (probability > 1) ? 1 : probability
+}
 ;==============end flesichner
 
 ^!p::ShowPreferences()
