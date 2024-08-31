@@ -236,7 +236,7 @@ This uses a heuristic approach to analyzing the language, so it may not work for
 - It accepts 1-3 measurements separated by "x" with optional spaces. Must have "mm" or "cm" at the end e.g. 1.0 x 2.0 x 3.0 cm, 1.0x2.0 mm, or 1 mm
 - It will always use the single number or average of the two largest measurements for Fleischner category. 
 - It will always categoirize a calcified nodule as benign and not recommend follow-up
-- If the sentence contains "solid" and "ground glass" descriptors, it will consider it a part-solid nodule
+- It will attempt to find the most suspicious nodule to drive management. Double check.
 
 Examples of well-formed sentences:
 "Incidental right upper lobe solid noncalcified pulmonary nodule measuring 7 x 8 mm (series 1, image 30)."
