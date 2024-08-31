@@ -2674,13 +2674,17 @@ class Nodule {
         this.Perifissural := false
         this.Morphology := ""
         this.GlobalHighRisk := false
-		
 
         if (!this.ContainsNoduleReference(nString))
             throw Exception("No nodule reference", -1)
         
         this.ParseNoduleProperties(nString)
         this.ExtractMeasurements(nString)
+
+        ; Handle cases where only the largest measurement is given for multiple nodules
+        if (InStr(nString, "up to") and InStr(nString, "multiple")) {
+            this.Multiplicity := "multiple"
+        }
     }
 
     ContainsNoduleReference(nString) {
@@ -2692,7 +2696,7 @@ class Nodule {
         return false
     }
 
-     ParseNoduleProperties(nString) {
+    ParseNoduleProperties(nString) {
         words := StrSplit(nString, A_Space)
         for index, word in words {
             if (this.IsMultiplicityWord(word))
@@ -2774,7 +2778,7 @@ class Nodule {
     }
 
     ExtractMeasurements(nString) {
-        needle := "i)(\d+(?:\.\d+)?)\s*(?:x\s*(\d+(?:\.\d+)?))?\s*(?:x\s*(\d+(?:\.\d+)?))?\s*([cm]m)"
+        needle := "i)(?:up to|approximately|about|~)?\s*(\d+(?:\.\d+)?)\s*(?:x\s*(\d+(?:\.\d+)?))?\s*(?:x\s*(\d+(?:\.\d+)?))?\s*([cm]m)"
         if (RegExMatch(nString, needle, match)) {
             this.mString := match
             this.Units := match4
@@ -2805,8 +2809,7 @@ class Nodule {
         this.OriginalUnits := this.Units
     }
 
-
-   Size() {
+    Size() {
         if (this.Measurements.Length() = 0)
             return 0
         
@@ -2822,7 +2825,7 @@ class Nodule {
         return averageSize  ; Already in mm
     }
 	
-	UpdateMString() {
+    UpdateMString() {
         if (this.OriginalMeasurements.Length() = 0)
             return
 
@@ -2855,10 +2858,10 @@ class Nodule {
             }
         } else if (this.Composition == "ground glass") {
             if (this.Multiplicity == "multiple") {
-				if (s < 6)
-					return "multiple_subsolid_small"
-				else
-					return "multiple_subsolid_large"
+                if (s < 6)
+                    return "multiple_subsolid_small"
+                else
+                    return "multiple_subsolid_large"
             } else {
                 if (s < 6)
                     return "single_gg_small"
@@ -2868,9 +2871,9 @@ class Nodule {
         } else if (this.Composition == "part solid") {
             if (this.Multiplicity == "multiple") {
                 if (s < 6)
-					return "multiple_subsolid_small"
-				else
-					return "multiple_subsolid_large"
+                    return "multiple_subsolid_small"
+                else
+                    return "multiple_subsolid_large"
             } else {
                 if (s < 6)
                     return "single_ps_small"
@@ -2919,56 +2922,87 @@ Join(arr, sep) {
     return result
 }
 
+PreprocessTextNodules(text) {
+    sentences := []
+    lines := StrSplit(text, "`n", "`r")
+    for _, line in lines {
+        ; Remove bullet points
+        line := RegExReplace(line, "^\s*[\*\-•]\s*", "")
+        
+        ; Split by periods, but be careful with measurements
+        parts := StrSplit(line, ".")
+        for index, part in parts {
+            part := Trim(part)
+            ; Check if this part is a continuation of a measurement
+            if (index > 1 && RegExMatch(parts[index-1], "\d+$") && RegExMatch(part, "^\d+"))
+                sentences[sentences.Length()] .= "." . part
+            else if (part != "")
+                sentences.Push(part)
+        }
+    }
+    return sentences
+}
+
 ProcessNodules(text) {
+    result := ""
+    sentences := PreprocessTextNodules(text)
     nodules := []
     globalHighRisk := CheckHighRiskConditions(text)
+    isMultiple := false
 
-    ; Calculate the probability of multiple nodules
-    multipleNodulesProbability := CalculateMultipleNodulesProbability(text)
-    isMultiple := (multipleNodulesProbability >= 0.45)  ; Adjusted threshold
+    for _, sentence in sentences {
+        multipleNodulesProbability := CalculateMultipleNodulesProbability(sentence)
+        isMultiple := (multipleNodulesProbability >= 0.45) or isMultiple  ; Adjusted threshold and accumulate
 
-    ; Split the input text into separate nodule descriptions
-    noduleDescriptions := SplitNoduleDescriptions(text)
-    
-    for _, description in noduleDescriptions {
-        try {
-            nodule := new Nodule(description)
-            nodule.GlobalHighRisk := globalHighRisk
-            nodule.Multiplicity := isMultiple ? "multiple" : "single"
-            nodules.Push(nodule)
-        } catch e {
-            ; Skip invalid nodule descriptions
+        noduleDescriptions := SplitNoduleDescriptions(sentence)
+        for _, description in noduleDescriptions {
+            try {
+                nodule := new Nodule(description)
+                nodule.GlobalHighRisk := globalHighRisk
+                nodule.Multiplicity := isMultiple ? "multiple" : "single"
+                nodules.Push(nodule)
+            } catch e {
+                ; Skip invalid nodule descriptions
+            }
         }
     }
 
     if (nodules.Length() = 0) {
-        ; Check for general mention of micronodules
-        if (InStr(text, "micronodule") or InStr(text, "micronodules")) {
-            nodule := new Nodule("Default micronodule measuring 5 mm")
+        ; Check for general mention of micronodules or multiple nodules
+        if (InStr(text, "micronodule") or InStr(text, "micronodules") or (InStr(text, "multiple") and InStr(text, "nodule"))) {
+            nodule := new Nodule("Multiple nodules measuring up to 5 mm")
             nodule.GlobalHighRisk := globalHighRisk
-            nodule.Multiplicity := isMultiple ? "multiple" : "single"
+            nodule.Multiplicity := "multiple"
             nodules.Push(nodule)
         } else {
-            return "Error: No valid nodules found."
+            result := "Error: No valid nodules found."
+            return result
         }
     }
 
+    ; Find the most significant nodule
     mostSignificantNodule := nodules[1]
     for _, nodule in nodules {
         nodule.UpdateMString()  ; Update mString for each nodule
-        if (nodule.Size() > mostSignificantNodule.Size())
+        if (nodule.Size() > mostSignificantNodule.Size() or (nodule.Size() = mostSignificantNodule.Size() and IsMoreSignificant(nodule, mostSignificantNodule))) {
             mostSignificantNodule := nodule
+        }
     }
+
+    ; Ensure multiplicity is set correctly
+    if (nodules.Length() > 1 or isMultiple or InStr(text, "multiple") or InStr(text, "micronodules")) {
+        mostSignificantNodule.Multiplicity := "multiple"
+    }
+
+    ; Generate result string
     result := text . "`n`n"  ; Preserve input text at the top
     result .= "Fleischner 2017 assessment:`n"
-    ; result .= "Prb: " . multipleNodulesProbability . "`n"  ; Display probability for debugging
-    if (isMultiple) {
+    if (mostSignificantNodule.Multiplicity == "multiple") {
         result .= "Multiple pulmonary nodules are present. The most significant nodule forming the basis of follow-up:`n"
     } else {
         result .= "A solitary pulmonary nodule is described forming the basis of follow-up:`n"
     }
-   
-    result .= "- Location: " . (mostSignificantNodule.Location ? mostSignificantNodule.Location : "Not specified") . "`n"
+    esult .= "- Location: " . (mostSignificantNodule.Location ? mostSignificantNodule.Location : "Not specified") . "`n"
     result .= "- Extracted Size: " . mostSignificantNodule.mString . "`n"
     result .= "- Fleischner Size (mm): " . Format("{:.1f} mm", mostSignificantNodule.Size()) . "`n"
     result .= "- Composition: " . (mostSignificantNodule.Composition ? mostSignificantNodule.Composition : "solid") . "`n"
@@ -2976,52 +3010,63 @@ ProcessNodules(text) {
         result .= "- Calcification: Present`n"
     if (mostSignificantNodule.Morphology)
         result .= "- Morphology: " . mostSignificantNodule.Morphology . "`n"
-    
-   currentDate := A_Now
+		
+    currentDate := A_Now
 
-   result .= "`nRECOMMENDATION:`n"
-	if ((globalHighRisk || mostSignificantNodule.Morphology == "spiculated") && !mostSignificantNodule.Calcified) {
-		mostSignificantNodule.HighRisk := true
-		recommendation := mostSignificantNodule.Recommendation()
-		result .= AddFollowUpDates(recommendation, currentDate)
-	} else {
-		if (!mostSignificantNodule.Calcified) {
-			lowRiskRec := mostSignificantNodule.Recommendation()
-			result .= "For low-risk patients: " . AddFollowUpDates(lowRiskRec, currentDate) . "`n"
-			mostSignificantNodule.HighRisk := true
-			highRiskRec := mostSignificantNodule.Recommendation()
-			result .= "For high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate)
-		} else {
-			result .= "Incidental calcified nodules do not typically require routine follow up.`n"
-		}
-	}
+    result .= "`nRECOMMENDATION:`n"
+    if ((globalHighRisk || mostSignificantNodule.Morphology == "spiculated") && !mostSignificantNodule.Calcified) {
+        mostSignificantNodule.HighRisk := true
+        recommendation := mostSignificantNodule.Recommendation()
+        result .= AddFollowUpDates(recommendation, currentDate)
+    } else {
+        if (!mostSignificantNodule.Calcified) {
+            lowRiskRec := mostSignificantNodule.Recommendation()
+            result .= "For low-risk patients: " . AddFollowUpDates(lowRiskRec, currentDate) . "`n"
+            mostSignificantNodule.HighRisk := true
+            highRiskRec := mostSignificantNodule.Recommendation()
+            result .= "For high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate)
+        } else {
+            result .= "Incidental calcified nodules do not typically require routine follow up.`n"
+        }
+    }
 
     if (globalHighRisk || mostSignificantNodule.Morphology == "spiculated")
         result .= "`n`nNote: Patient has risk factors or morphologic characteristics that may increase the risk of lung cancer."
 
-    if(ShowCitations)
-		result .= "`n`nCitation: MacMahon H, Naidich DP, Goo JM, et al. Guidelines for Management of Incidental Pulmonary Nodules Detected on CT Images: From the Fleischner Society 2017. Radiology. 2017;284(1):228-243. doi:10.1148/radiol.2017161659"
-
+    if (ShowCitations)
+        result .= "`n`nCitation: MacMahon H, Naidich DP, Goo JM, et al. Guidelines for Management of Incidental Pulmonary Nodules Detected on CT Images: From the Fleischner Society 2017. Radiology. 2017;284(1):228-243. doi:10.1148/radiol.2017161659"
+   
     return result
+}
+
+IsMoreSignificant(nodule1, nodule2) {
+    ; Order of significance: solid > part solid > ground glass
+    compositionOrder := {"solid": 3, "part solid": 2, "ground glass": 1}
+    return compositionOrder[nodule1.Composition] > compositionOrder[nodule2.Composition]
 }
 
 SplitNoduleDescriptions(text) {
     descriptions := []
-    ; Regular expression to match nodule descriptions
-    ; This regex looks for sentences containing nodule-related terms and measurements
-    needle := "i)([^.]*(?:nodule|mass|opacity|lesion)[^.]*(?:\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))[^.]*\.?)"
+    ; Modified regex to capture nodule descriptions more accurately, including "up to" measurements and multiple nodules
+    needle := "i)(?:(?:a|an|one|1)\s+)?(?:(?:up to|approximately|about|~)?\s*\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?\s*(?:(?:solid|ground glass|part[- ]solid|calcified|noncalcified|spiculated|lobulated|irregular|smooth)?\s*(?:pulmonary\s+)?(?:nodule|mass|opacity|lesion)s?)"
     pos := 1
     while (pos := RegExMatch(text, needle, match, pos)) {
-        descriptions.Push(Trim(match1))
+        descriptions.Push(Trim(match))
         pos += StrLen(match)
     }
     
-    ; If no specific nodule descriptions found, check for general mentions of micronodules
-    if (descriptions.Length() = 0 and (InStr(text, "micronodule") or InStr(text, "micronodules"))) {
-        descriptions.Push(text)
+    ; If no specific nodule descriptions found, check for general mentions of nodules
+    if (descriptions.Length() = 0) {
+        if (RegExMatch(text, "i)multiple.*nodules.*(?:measure|up to).*(\d+(?:\.\d+)?)\s*(?:x\s*\d+(?:\.\d+)?)*\s*(mm|cm)", match)) {
+            descriptions.Push("Multiple nodules up to " . match)
+        } else if (InStr(text, "micronodule") or InStr(text, "micronodules")) {
+            descriptions.Push("Multiple micronodules")
+        } else if (InStr(text, "multiple") and InStr(text, "nodule")) {
+            descriptions.Push("Multiple nodules")
+        }
     }
     
-    ; If still no descriptions found, return the entire text as one description
+    ; If still no descriptions found, return the entire text
     if (descriptions.Length() = 0) {
         descriptions.Push(text)
     }
