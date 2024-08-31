@@ -1,7 +1,7 @@
 ; ==========================================
 ; Radiologist's Helper Script
 ; Radiology Right Click
-; Version: 1.02
+; Version: 1.04
 ; Description: This AutoHotkey script provides various calculation tools and utilities
 ;              for radiologists, including volume calculations, date estimations,
 ;              and statistical analysis of measurements.
@@ -1339,7 +1339,7 @@ ShowPreferences() {
 	Gui, Add, Checkbox, x10 y480 w200 vShowContrastPremedication Checked%ShowContrastPremedication%,  Contrast Premedication
 	Gui, Add, Checkbox, x10 y510 w200 vShowFleischnerCriteria Checked%ShowFleischnerCriteria%, Fleischner Criteria
 	Gui, Add, Text, x10 y550 w200, Pause Duration (current: %currentPauseDuration%):
-    Gui, Add, DropDownList, x10 y560 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
+    Gui, Add, DropDownList, x10 y590 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
     if (PauseDuration = 180000)
         GuiControl, Choose, PauseDurationChoice, 1
     else if (PauseDuration = 600000)
@@ -3003,9 +3003,9 @@ ProcessNodules(text) {
         result .= "A solitary pulmonary nodule is described forming the basis of follow-up:`n"
     }
     esult .= "- Location: " . (mostSignificantNodule.Location ? mostSignificantNodule.Location : "Not specified") . "`n"
-    result .= "- Extracted Size: " . mostSignificantNodule.mString . "`n"
+    result .= "- Extracted (or inferred) Size: " . mostSignificantNodule.mString . "`n"
     result .= "- Fleischner Size (mm): " . Format("{:.1f} mm", mostSignificantNodule.Size()) . "`n"
-    result .= "- Composition: " . (mostSignificantNodule.Composition ? mostSignificantNodule.Composition : "solid") . "`n"
+    result .= "- Composition (or inferred): " . (mostSignificantNodule.Composition ? mostSignificantNodule.Composition : "solid") . "`n"
     if (mostSignificantNodule.Calcified)
         result .= "- Calcification: Present`n"
     if (mostSignificantNodule.Morphology)
@@ -3013,19 +3013,22 @@ ProcessNodules(text) {
 		
     currentDate := A_Now
 
-    result .= "`nRECOMMENDATION:`n"
+    result .= "`nFLEISCHNER SOCIETY RECOMMENDATION:`n"
     if ((globalHighRisk || mostSignificantNodule.Morphology == "spiculated") && !mostSignificantNodule.Calcified) {
         mostSignificantNodule.HighRisk := true
         recommendation := mostSignificantNodule.Recommendation()
         result .= AddFollowUpDates(recommendation, currentDate)
     } else {
-        if (!mostSignificantNodule.Calcified) {
+        if (!mostSignificantNodule.Calcified && mostSignificantNodule.Composition == "solid" || mostSignificantNodule.Composition == "") {
             lowRiskRec := mostSignificantNodule.Recommendation()
             result .= "For low-risk patients: " . AddFollowUpDates(lowRiskRec, currentDate) . "`n"
             mostSignificantNodule.HighRisk := true
             highRiskRec := mostSignificantNodule.Recommendation()
-            result .= "For high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate)
-        } else {
+            result .= "`nFor high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate) . "`n"
+		} else if (!mostSignificantNodule.Calcified && (mostSignificantNodule.Composition == "part solid" || mostSignificantNodule.Composition == "ground glass")) {
+			recommendation := mostSignificantNodule.Recommendation()
+			result .= AddFollowUpDates(recommendation, currentDate)
+		} else {
             result .= "Incidental calcified nodules do not typically require routine follow up.`n"
         }
     }
@@ -3047,8 +3050,8 @@ IsMoreSignificant(nodule1, nodule2) {
 
 SplitNoduleDescriptions(text) {
     descriptions := []
-    ; Modified regex to capture nodule descriptions more accurately, including "up to" measurements and multiple nodules
-    needle := "i)(?:(?:a|an|one|1)\s+)?(?:(?:up to|approximately|about|~)?\s*\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?\s*(?:(?:solid|ground glass|part[- ]solid|calcified|noncalcified|spiculated|lobulated|irregular|smooth)?\s*(?:pulmonary\s+)?(?:nodule|mass|opacity|lesion)s?)"
+    ; Modified regex to capture nodule descriptions more accurately, including cases where "nodule" appears before measurements
+    needle := "i)(?:(?:multiple\s+)?(?:nodule|mass|opacity|lesion)s?(?:\s+(?:up to|approximately|about|~)?)?\s*(?:\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?|(?:(?:up to|approximately|about|~)?\s*\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?\s*(?:(?:solid|ground glass|groundglass|ground-glass|gg|ggo|part[- ]solid|calcified|noncalcified|spiculated|lobulated|irregular|smooth)?\s*(?:pulmonary\s+)?(?:nodule|mass|opacity|lesion)s?))"
     pos := 1
     while (pos := RegExMatch(text, needle, match, pos)) {
         descriptions.Push(Trim(match))
@@ -3057,8 +3060,8 @@ SplitNoduleDescriptions(text) {
     
     ; If no specific nodule descriptions found, check for general mentions of nodules
     if (descriptions.Length() = 0) {
-        if (RegExMatch(text, "i)multiple.*nodules.*(?:measure|up to).*(\d+(?:\.\d+)?)\s*(?:x\s*\d+(?:\.\d+)?)*\s*(mm|cm)", match)) {
-            descriptions.Push("Multiple nodules up to " . match)
+        if (RegExMatch(text, "i)(?:multiple\s+)?nodules?.*(?:measure|up to).*(\d+(?:\.\d+)?)\s*(?:x\s*\d+(?:\.\d+)?)*\s*(mm|cm)", match)) {
+            descriptions.Push(match)
         } else if (InStr(text, "micronodule") or InStr(text, "micronodules")) {
             descriptions.Push("Multiple micronodules")
         } else if (InStr(text, "multiple") and InStr(text, "nodule")) {
@@ -3095,10 +3098,11 @@ AddFollowUpDates(recommendation, currentDate) {
             maxDate := DateCalc(currentDate, period.max)
             FormatTime, formattedMinDate, %minDate%, MMMM yyyy
             FormatTime, formattedMaxDate, %maxDate%, MMMM yyyy
+			FormatTime, formattedCurrentDate, %currentDate%, MMMM yyyy
             if (formattedMinDate != formattedMaxDate)
-                recommendation .= "`n- " . period.text . ": " . formattedMinDate . " to " . formattedMaxDate
+                recommendation .= " " . period.text . " is " . formattedMinDate . " to " . formattedMaxDate . " from " . formattedCurrentDate
             else
-                recommendation .= "`n- " . period.text . ": " . formattedMinDate
+                recommendation .= " " . period.text . " is " . formattedMinDate . " from " . formattedCurrentDate
         }
     }
     
