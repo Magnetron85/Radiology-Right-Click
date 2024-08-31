@@ -2979,21 +2979,25 @@ ProcessNodules(text) {
     
    currentDate := A_Now
 
-    result .= "`nRECOMMENDATION:`n"
-    if (globalHighRisk) {
-        mostSignificantNodule.HighRisk := true
-        recommendation := mostSignificantNodule.Recommendation()
-        result .= AddFollowUpDates(recommendation, currentDate)
-    } else {
-        lowRiskRec := mostSignificantNodule.Recommendation()
-        result .= "For low-risk patients: " . AddFollowUpDates(lowRiskRec, currentDate) . "`n"
-        mostSignificantNodule.HighRisk := true
-        highRiskRec := mostSignificantNodule.Recommendation()
-        result .= "For high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate)
-    }
+   result .= "`nRECOMMENDATION:`n"
+	if ((globalHighRisk || mostSignificantNodule.Morphology == "spiculated") && !mostSignificantNodule.Calcified) {
+		mostSignificantNodule.HighRisk := true
+		recommendation := mostSignificantNodule.Recommendation()
+		result .= AddFollowUpDates(recommendation, currentDate)
+	} else {
+		if (!mostSignificantNodule.Calcified) {
+			lowRiskRec := mostSignificantNodule.Recommendation()
+			result .= "For low-risk patients: " . AddFollowUpDates(lowRiskRec, currentDate) . "`n"
+			mostSignificantNodule.HighRisk := true
+			highRiskRec := mostSignificantNodule.Recommendation()
+			result .= "For high-risk patients: " . AddFollowUpDates(highRiskRec, currentDate)
+		} else {
+			result .= "Incidental calcified nodules do not typically require routine follow up.`n"
+		}
+	}
 
-    if (globalHighRisk)
-        result .= "`n`nNote: Patient has risk factors that may increase the risk of lung cancer."
+    if (globalHighRisk || mostSignificantNodule.Morphology == "spiculated")
+        result .= "`n`nNote: Patient has risk factors or morphologic characteristics that may increase the risk of lung cancer."
 
     if(ShowCitations)
 		result .= "`n`nCitation: MacMahon H, Naidich DP, Goo JM, et al. Guidelines for Management of Incidental Pulmonary Nodules Detected on CT Images: From the Fleischner Society 2017. Radiology. 2017;284(1):228-243. doi:10.1148/radiol.2017161659"
@@ -3030,10 +3034,14 @@ AddFollowUpDates(recommendation, currentDate) {
     
     if (InStr(recommendation, "3 months"))
         followUpPeriods.Push({min: 90, max: 90, text: "3 months"})
+	if (InStr(recommendation, "3-6 months"))
+        followUpPeriods.Push({min: 90, max: 183, text: "3-6 months"})
     if (InStr(recommendation, "6-12 months"))
         followUpPeriods.Push({min: 180, max: 365, text: "6-12 months"})
     if (InStr(recommendation, "18-24 months"))
         followUpPeriods.Push({min: 540, max: 730, text: "18-24 months"})
+	if (InStr(recommendation, "2 years until 5 years"))
+        followUpPeriods.Push({min: 1095, max: 1825, text: "2 years until 5 years"})
     
     if (followUpPeriods.Length() > 0) {
         recommendation .= "`nFollow-up dates:"
