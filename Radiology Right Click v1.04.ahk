@@ -133,6 +133,16 @@ InitializeRecommendations() ; Make sure to call this function before using the N
 
 ; Set up context menu for target applications
 #If IsTargetApp()
+
+; Hook the spacebar to reset the timer if it's pressed after a single period
+$Space::
+    if (A_PriorKey == "." and A_TimeSincePriorHotkey < 500)
+    {
+        lastPeriodTime := 0
+    }
+    SendInput {Space}
+return
+
 RButton::
 {
         
@@ -543,6 +553,9 @@ CalculateBulletVolume(input) {
 }
 
 CalculatePSADensity(input) {
+	volNotGiven = 1
+	volumeMethod = User Supplied
+	
     ; Regular expression for PSA value
     PSARegEx := "i)PSA\s*(?:level|value)?:?\s*(\d+(?:\.\d+)?)\s*(?:ng\/ml|ng\/mL|ng/ml|ng/mL|ng\/cc|ng/cc)?"
     
@@ -552,25 +565,40 @@ CalculatePSADensity(input) {
     if (RegExMatch(input, PSARegEx, PSAMatch)) {
         PSALevel := PSAMatch1
     } else {
-        return "Invalid input format for PSA density calculation.`nSuggested format:`nPSA: 5.6 ng/mL`nSize: 3.5 x 5.4 x 2.5 cm (24.7 cc)`nor`nPSA level: 4.5 ng/mL, Prostate volume: 30 cc"
+        return "Invalid input format for PSA density calculation.`nSuggested format:`nPSA: 5.6 ng/mL`nSize: 3.5 x 5.4 x 2.5 cm"
     }
 
     if (RegExMatch(input, VolumeRegEx, VolumeMatch)) {
         ProstateVolume := VolumeMatch1 ? VolumeMatch1 : (VolumeMatch2 ? VolumeMatch2 : (VolumeMatch4 ? VolumeMatch4 : ""))
     } else {
-        return "Prostate volume not found in the selected text.`nSuggested format:`nPSA: 5.6 ng/mL`nSize: 3.5 x 5.4 x 2.5 cm (24.7 cc)`nor`nPSA level: 4.5 ng/mL, Prostate volume: 30 cc"
-    }
-
-    if (ProstateVolume == "") {
-        return "Prostate volume not found in the selected text.`nSuggested format:`nPSA: 5.6 ng/mL`nSize: 3.5 x 5.4 x 2.5 cm (24.7 cc)`nor`nPSA level: 4.5 ng/mL, Prostate volume: 30 cc"
+		volNotGiven=0
+        ; Try to calculate volume using CalculateBullettVolume
+        bulletResult := CalculateBulletVolume(input)
+        if (!InStr(bulletResult, "Invalid input")) {
+			ProstateVolume := RegExReplace(bulletResult, "s).*?(\d+(?:\.\d+)?)(?:\s*cc)?\).*", "$1")
+            volumeMethod = Bullett Volume
+            ; If volume >= 55 cc, use CalculateEllipsoidVolume instead (https://pubs.rsna.org/doi/10.1148/radiol.2501080290#:~:text=Overall%2C%20between%2066%25%20and%2075,bullet%20formula%20is%20highly%20accurate.)
+            if (ProstateVolume >= 55) {
+				ellipsoidResult := CalculateEllipsoidVolume(input)
+				volumeMethod = Ellipsoid Volume
+                if (!InStr(ellipsoidResult, "Invalid input")) {
+                    ProstateVolume := RegExReplace(ellipsoidResult, "s).*?(\d+(?:\.\d+)?)(?:\s*cc)?\).*", "$1")
+                }
+            }
+			
+        } else {
+            return "Prostate volume or dimensions not found or invalid in the input.`nSuggested format:`nPSA: 5.6 ng/mL`nSize: 3.5 x 5.4 x 2.5 cm"
+        }
     }
 
     PSADensity := PSALevel / ProstateVolume
     PSADensity := Round(PSADensity, 3)
-
-    result := input . "`nPSA Density: " . PSADensity . (DisplayUnits ? " ng/mL/cc" : "")
-    ;if (DisplayAllValues)
-    ;    result .= "`nPSA: " . PSALevel . (DisplayUnits ? " ng/mL" : "") . "`nProstate Volume: " . Round(ProstateVolume, 1) . (DisplayUnits ? " cc" : "")
+	
+	if(volNotGiven=0){
+		result := input . "`nProstate volume: " . ProstateVolume . " cc " . "- " . volumeMethod . "`nPSA Density: " . PSADensity . (DisplayUnits ? " ng/mL/cc" : "")
+	} else {
+		result := input . "`nPSA Density: " . PSADensity . (DisplayUnits ? " ng/mL/cc" : "")
+	}
     return result
 }
 
@@ -2777,37 +2805,46 @@ class Nodule {
         return (LevenshteinDistance(word1, word2) <= threshold)
     }
 
-    ExtractMeasurements(nString) {
-        needle := "i)(?:up to|approximately|about|~)?\s*(\d+(?:\.\d+)?)\s*(?:x\s*(\d+(?:\.\d+)?))?\s*(?:x\s*(\d+(?:\.\d+)?))?\s*([cm]m)"
-        if (RegExMatch(nString, needle, match)) {
-            this.mString := match
-            this.Units := match4
-            Loop, 3 {
-                if (match%A_Index% != "")
-                    this.Measurements.Push(match%A_Index%)
-            }
-        }
-        else {
-            needle := "i)(?:up to|approximately|about|~)?\s*(\d+(?:\.\d+)?)\s*([cm]m)"
-            if (RegExMatch(nString, needle, match)) {
-                this.mString := match
-                this.Units := match2
-                this.Measurements.Push(match1)
-            }
-            else if (InStr(nString, "micronodule") or InStr(nString, "micronodules")) {
-                ; Default size for micronodules when no measurement is given
-                this.mString := "5 mm"
-                this.Units := "mm"
-                this.Measurements.Push(5)
-            }
-            else {
-                throw Exception("No measurements found", -2)
-            }
-        }
-        ; Store original measurements
-        this.OriginalMeasurements := this.Measurements.Clone()
-        this.OriginalUnits := this.Units
-    }
+	ExtractMeasurements(nString) {
+	needle := "i)(?:up to|approximately|about|~)?\s*((?:\d*\.)?\d+)\s*(?:x\s*((?:\d*\.)?\d+))?\s*(?:x\s*((?:\d*\.)?\d+))?\s*([cm]m)"
+		if (RegExMatch(nString, needle, match)) {
+			this.mString := match
+			this.Units := match4
+			Loop, 3 {
+				if (match%A_Index% != "")
+					this.Measurements.Push(match%A_Index%)
+			}
+		}
+		else {
+			needle := "i)(?:up to|approximately|about|~)?\s*((?:\d*\.)?\d+)\s*([cm]m)"
+			if (RegExMatch(nString, needle, match)) {
+				this.mString := match
+				this.Units := match2
+				this.Measurements.Push(match1)
+			}
+			else if (InStr(nString, "micronodule") or InStr(nString, "micronodules")) {
+				; Default size for micronodules when no measurement is given
+				this.mString := "5 mm"
+					this.Units := "mm"
+						this.Measurements.Push(5)
+				}
+				else {
+					; If no specific measurement found, look for any number followed by units
+					needle := "i)((?:\d*\.)?\d+)\s*([cm]m)"
+					if (RegExMatch(nString, needle, match)) {
+						this.mString := match
+						this.Units := match2
+						this.Measurements.Push(match1)
+					}
+					else {
+					throw Exception("No measurements found", -2)
+					}
+				}
+			}
+		; Store original measurements
+		this.OriginalMeasurements := this.Measurements.Clone()
+		this.OriginalUnits := this.Units
+	}
 
     Size() {
         if (this.Measurements.Length() = 0)
@@ -3050,12 +3087,17 @@ IsMoreSignificant(nodule1, nodule2) {
 
 SplitNoduleDescriptions(text) {
     descriptions := []
-    ; Modified regex to capture nodule descriptions more accurately, including cases where "nodule" appears before measurements
-    needle := "i)(?:(?:multiple\s+)?(?:nodule|mass|opacity|lesion)s?(?:\s+(?:up to|approximately|about|~)?)?\s*(?:\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?|(?:(?:up to|approximately|about|~)?\s*\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?\s*(?:(?:solid|ground glass|groundglass|ground-glass|gg|ggo|part[- ]solid|calcified|noncalcified|spiculated|lobulated|irregular|smooth)?\s*(?:pulmonary\s+)?(?:nodule|mass|opacity|lesion)s?))"
-    pos := 1
-    while (pos := RegExMatch(text, needle, match, pos)) {
-        descriptions.Push(Trim(match))
-        pos += StrLen(match)
+    ; Modified regex to capture nodule descriptions more accurately, including cases where size appears before location and "nodule"
+    needle := "i)(?:(?:\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))\s*(?:[a-z\s]+\s+)?(?:pulmonary\s+)?(?:nodule|mass|opacity|lesion)s?|(?:(?:multiple\s+)?(?:nodule|mass|opacity|lesion)s?(?:\s+(?:up to|approximately|about|~)?)?\s*(?:\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?|(?:(?:up to|approximately|about|~)?\s*\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?)*\s*(?:mm|cm))?\s*(?:(?:solid|ground glass|part[- ]solid|calcified|noncalcified|spiculated|lobulated|irregular|smooth)?\s*(?:pulmonary\s+)?(?:nodule|mass|opacity|lesion)s?)))(?:\s*\([^)]+\))?"
+    
+    ; Split the text into lines
+    lines := StrSplit(text, "`n", "`r")
+    for _, line in lines {
+        pos := 1
+        while (pos := RegExMatch(line, needle, match, pos)) {
+            descriptions.Push(Trim(match))
+            pos += StrLen(match)
+        }
     }
     
     ; If no specific nodule descriptions found, check for general mentions of nodules
@@ -3100,9 +3142,9 @@ AddFollowUpDates(recommendation, currentDate) {
             FormatTime, formattedMaxDate, %maxDate%, MMMM yyyy
 			FormatTime, formattedCurrentDate, %currentDate%, MMMM yyyy
             if (formattedMinDate != formattedMaxDate)
-                recommendation .= " " . period.text . " is " . formattedMinDate . " to " . formattedMaxDate . " from " . formattedCurrentDate
+                recommendation .= " " . period.text . " is " . formattedMinDate . " to " . formattedMaxDate . " from " . formattedCurrentDate . ". "
             else
-                recommendation .= " " . period.text . " is " . formattedMinDate . " from " . formattedCurrentDate
+                recommendation .= " " . period.text . " is " . formattedMinDate . " from " . formattedCurrentDate . ". "
         }
     }
     
