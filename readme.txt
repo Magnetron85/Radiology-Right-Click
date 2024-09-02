@@ -106,6 +106,10 @@ OR
 ```
 PSA level: 4.5 ng/mL, Prostate volume: 30 cc
 ```
+OR
+```
+PSA level: 4.5 ng/ml, Prostate Size: 4.5 x 4.2 x 4.1 cm (will calculate Bullet volume first, if > 55 cc, switches to Ellipsoid volume)
+```
 
 ### Pregnancy Dates
 Description: calculates LMP, current gestational age, and expected delivery date based on various inputs
@@ -232,7 +236,7 @@ User enters date and time of scan in GUI (defaulted to 13 hours in future). Func
 Adapted from https://github.com/EricVanBogaert/AutoHotKey-for-Radiology. Thank you Eric Van Bogaert! 
 To use, highlight a sentence in a radiology report and right click. It will display a message box with nodule descriptors and copy the recommendation into the report at the end of the highlighted sentence.
 
-This uses a heuristic approach to analyzing the language, so it may not work for all cases. Some important caveats:
+This uses a heuristic and semi-statistical approach to analyzing the language, so it may not work for all cases. Some important caveats:
 - It accepts 1-3 measurements separated by "x" with optional spaces. Must have "mm" or "cm" at the end e.g. 1.0 x 2.0 x 3.0 cm, 1.0x2.0 mm, or 1 mm
 - It will always use the single number or average of the two largest measurements for Fleischner category. 
 - It will always categoirize a calcified nodule as benign and not recommend follow-up
