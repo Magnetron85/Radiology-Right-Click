@@ -1560,10 +1560,8 @@ CalculateCalciumScorePercentile(input) {
     result := ""
     if (age >= 45 && age <= 84 && (race = "White" || race = "Black" || race = "Hispanic" || race = "Chinese")) {
         result := CalculateMESAScore(age, race, sex, score)
-    } else if (age >= 30 && age <= 74) {
+    } else if (age >= 30) {
         result := CalculateHoffScore(age, sex, score, race)
-    } else if (age > 84) {
-        result := "Warning: Age is above 84. The calculator may not provide accurate results. Please consult with a healthcare professional for interpretation.`n`n" . CalculateHoffScore(age, sex, score, race)
     } else {
         result := "Error: The calcium score calculators are only valid for ages 30 and above."
     }
