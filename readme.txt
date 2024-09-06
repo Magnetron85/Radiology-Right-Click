@@ -34,8 +34,7 @@ Below are detailed descriptions of each available function, along with example i
    ```
    Notes: 
    - Race is optional; if omitted, Hoff method is used.
-   - Supports ages 45-84 for MESA, 30-74 for Hoff.
-   - For ages >84, Hoff method is used with a warning.
+   - Supports ages 45-84 for MESA, 30-74 for Hoff. If age < 45, Hoff is used even if race is provided
 
 2. **Ellipsoid Volume Calculator**
    Description: Calculates volume of an ellipsoid based on three dimensions.
