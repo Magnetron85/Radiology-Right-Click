@@ -47,7 +47,7 @@ global g_FleischnerNodules := []
 global g_ShowFleischnerCitation := false
 global g_ShowFleischnerExclusions := false
 global recommendations := {}
-
+global ShowNASCETCalculator := true
 
 
 
@@ -100,6 +100,7 @@ LoadPreferencesFromFile() {
 		IniRead, ShowArterialAge, %preferencesFile%, Display, ShowArterialAge, 1
 		IniRead, ShowContrastPremedication, %preferencesFile%, Calculations, ShowContrastPremedication, 1
 		IniRead, ShowFleischnerCriteria, %preferencesFile%, Calculations, ShowFleischnerCriteria, 1
+		IniRead, ShowNASCETCalculator, %preferencesFile%, Calculations, ShowNASCETCalculator, 1
     } else {
         MsgBox, Preferences file not found: %preferencesFile%. File will be created if preferences are edited.
     }
@@ -121,6 +122,7 @@ LoadPreferencesFromFile() {
 	ShowCalciumScorePercentile := (ShowCalciumScorePercentile = "1")
 	ShowCitations := (ShowCitations = "1")
 	ShowArterialAge := (ShowArterialAge = "1")
+	ShowNASCETCalculator := (ShowNASCETCalculator = "1")
     PauseDuration += 0
 }
 
@@ -252,7 +254,10 @@ CreateCustomMenu() {
         Menu, CustomMenu, Add, Calculate Contrast Premedication, CalculateContrastPremedication
     }
 	if (ShowFleischnerCriteria) {
-    Menu, CustomMenu, Add, Calculate Fleischner Criteria, CalculateFleischnerCriteria
+		Menu, CustomMenu, Add, Calculate Fleischner Criteria, CalculateFleischnerCriteria
+	}
+	if (ShowNASCETCalculator) {
+		Menu, CustomMenu, Add, Calculate NASCET, CalculateNASCET
 	}
     Menu, CustomMenu, Add
     Menu, CustomMenu, Add, Pause Script, PauseScript
@@ -375,6 +380,11 @@ return
 
 CalculateFleischnerCriteria:
     Result := ProcessNodules(g_SelectedText)
+    ShowResult(Result)
+return
+
+CalculateNASCET:
+    Result := CalculateNASCET(g_SelectedText)
     ShowResult(Result)
 return
 
@@ -1366,8 +1376,9 @@ ShowPreferences() {
     Gui, Add, Checkbox, x10 y450 w200 vShowArterialAge Checked%ShowArterialAge%, Show Arterial Age
 	Gui, Add, Checkbox, x10 y480 w200 vShowContrastPremedication Checked%ShowContrastPremedication%,  Contrast Premedication
 	Gui, Add, Checkbox, x10 y510 w200 vShowFleischnerCriteria Checked%ShowFleischnerCriteria%, Fleischner Criteria
-	Gui, Add, Text, x10 y550 w200, Pause Duration (current: %currentPauseDuration%):
-    Gui, Add, DropDownList, x10 y590 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
+	Gui, Add, Checkbox, x10 y540 w200 vShowNASCETCalculator Checked%ShowNASCETCalculator%, NASCET Calculator
+	Gui, Add, Text, x10 y580 w200, Pause Duration (current: %currentPauseDuration%):
+    Gui, Add, DropDownList, x10 y620 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
     if (PauseDuration = 180000)
         GuiControl, Choose, PauseDurationChoice, 1
     else if (PauseDuration = 600000)
@@ -1378,9 +1389,9 @@ ShowPreferences() {
         GuiControl, Choose, PauseDurationChoice, 4
     else if (PauseDuration = 36000000)
         GuiControl, Choose, PauseDurationChoice, 5
-    Gui, Add, Button, x60 y640 w100 gSavePreferences, Save
+    Gui, Add, Button, x60 y670 w100 gSavePreferences, Save
     
-    Gui, Show, w220 h700
+    Gui, Show, w220 h770
 }
 
 
@@ -1435,6 +1446,7 @@ SavePreferencesToFile() {
 	IniWrite, %ShowCalciumScorePercentile%, %A_ScriptDir%\preferences.ini, Calculations, ShowCalciumScorePercentile
 	IniWrite, %ShowContrastPremedication%, %A_ScriptDir%\preferences.ini, Calculations, ShowContrastPremedication
 	IniWrite, %ShowFleischnerCriteria%, %A_ScriptDir%\preferences.ini, Calculations, ShowFleischnerCriteria
+	IniWrite, %ShowNASCETCalculator%, %A_ScriptDir%\preferences.ini, Calculations, ShowNASCETCalculator
 }
 
 PreferencesGuiClose:
@@ -2390,7 +2402,7 @@ ParseCalciumScore(text) {
             parts := StrSplit(Trim(line), A_Tab)
             if (parts.Length() >= 2) {
                 arteryName := Trim(parts[1])
-                score := Ceil(parts[2] + 0) ; Agatston score, rounded up
+                score := Round(parts[2] + 0) ; Agatston score, rounded to nearest integer
                 
                 mappedName := FindBestMatch(arteryName, g_arteryNames)
                 if (mappedName && mappedName != "Total") {
@@ -3213,6 +3225,128 @@ CalculateMultipleNodulesProbability(text) {
     return (probability > 1) ? 1 : probability
 }
 ;==============end flesichner
+
+;==============NASCET calculator
+CalculateNASCET(input) {
+    global ShowCitations
+
+    ; Replace newlines with spaces to handle multi-line input
+    rawinput := input 
+	input := RegExReplace(input, "\r?\n", " ")
+
+    ; Updated regular expression to match various reporting styles and terminologies
+    RegExNeedle := "i)(?:"
+                 . "(?:(?:distal|normal|proximal|wider|patent)(?:\s+(?:ica|carotid|lumen|segment|caliber|diameter))?(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                 . "|"
+                 . "(?:(?:ica|internal\s+carotid(?:\s+artery)?|carotid|lumen)(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                 . ")"
+                 . ".*?"  ; This allows for any text between the two measurements
+                 . "(?:"
+                 . "(?:(?:stenosis|narrowed|stenotic|residual|focal|narrowest|tightest)(?:\s+(?:ica|lumen|segment|diameter|region))?(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                 . "|"
+                 . "(?:(?:narrows|narrowing|stenosis)(?:\s+to)?(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                 . ")"
+
+    distal := ""
+    distalUnit := ""
+    stenosis := ""
+    stenosisUnit := ""
+
+    if (RegExMatch(input, RegExNeedle, match)) {
+        distal := match1 ? match1 : match3
+        distalUnit := match2 ? match2 : match4
+        stenosis := match5 ? match5 : match7
+        stenosisUnit := match6 ? match6 : match8
+    } else {
+        ; If no match found, try reversing the order
+        RegExNeedle := "i)(?:"
+                     . "(?:(?:stenosis|narrowed|stenotic|residual|focal|narrowest|tightest)(?:\s+(?:ica|lumen|segment|diameter|region))?(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                     . "|"
+                     . "(?:(?:narrows|narrowing|stenosis)(?:\s+to)?(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                     . ")"
+                     . ".*?"  ; This allows for any text between the two measurements
+                     . "(?:"
+                     . "(?:(?:distal|normal|proximal|wider|patent)(?:\s+(?:ica|carotid|lumen|segment|caliber|diameter))?(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                     . "|"
+                     . "(?:(?:ica|internal\s+carotid(?:\s+artery)?|carotid|lumen)(?:\s*measures\s+|\s*:?\s*)(\d+(?:\.\d+)?)\s*(mm|cm))"
+                     . ")"
+
+        if (RegExMatch(input, RegExNeedle, match)) {
+            stenosis := match1 ? match1 : match3
+            stenosisUnit := match2 ? match2 : match4
+            distal := match5 ? match5 : match7
+            distalUnit := match6 ? match6 : match8
+        }
+    }
+
+    ; If we still don't have both measurements, try to extract any two numbers
+    if (!distal || !stenosis) {
+        numbers := []
+        units := []
+        RegExNeedle := "i)(\d+(?:\.\d+)?)\s*(mm|cm)"
+        pos := 1
+        while (pos := RegExMatch(input, RegExNeedle, match, pos)) {
+            numbers.Push(match1)
+            units.Push(match2)
+            pos += StrLen(match)
+        }
+
+        ; If we found exactly two numbers, use them
+        if (numbers.Length() == 2) {
+            ; Convert both to mm for comparison
+            num1 := (units[1] == "cm") ? numbers[1] * 10 : numbers[1]
+            num2 := (units[2] == "cm") ? numbers[2] * 10 : numbers[2]
+
+            if (num1 > num2) {
+                distal := numbers[1]
+                distalUnit := units[1]
+                stenosis := numbers[2]
+                stenosisUnit := units[2]
+            } else {
+                distal := numbers[2]
+                distalUnit := units[2]
+                stenosis := numbers[1]
+                stenosisUnit := units[1]
+            }
+        }
+    }
+
+    ; Check if we have both measurements
+    if (!distal || !stenosis) {
+        return "Unable to extract both measurements. Please check the input format. Sample: The stenosis measures 2 mm. The distal ICA measures 6 mm."
+    }
+
+    ; Convert to mm if necessary
+    distal := (distalUnit = "cm") ? distal * 10 : distal
+    stenosis := (stenosisUnit = "cm") ? stenosis * 10 : stenosis
+
+    ; Calculate NASCET
+    nascetValue := (distal - stenosis) / distal * 100
+
+    ; Round to one decimal place
+    nascetValue := Round(nascetValue, 1)
+
+    result := rawinput . "`n`n"
+	result .= "NASCET Calculation:`n"
+    result .= "Distal ICA diameter: " . Round(distal, 1) . " mm`n"
+    result .= "Stenosis diameter: " . Round(stenosis, 1) . " mm`n"
+    result .= "NASCET value: " . nascetValue . "%`n`n"
+
+    ; Add interpretation
+    if (nascetValue < 50)
+        result .= "Interpretation: Mild stenosis (<50%)"
+    else if (nascetValue >= 50 && nascetValue < 70)
+        result .= "Interpretation: Moderate stenosis (50-69%)"
+    else
+        result .= "Interpretation: Severe stenosis (>=70%)"
+
+    if (ShowCitations) {
+        result .= "`n`nCitation: North American Symptomatic Carotid Endarterectomy Trial Collaborators. Beneficial effect of carotid endarterectomy in symptomatic patients with high-grade carotid stenosis. N Engl J Med. 1991;325(7):445-453. doi:10.1056/NEJM199108153250701"
+    }
+
+    return result
+}
+; ==== END NASCET
 
 ^!p::ShowPreferences()
 
