@@ -186,6 +186,22 @@ Below are detailed descriptions of each available function, along with example i
     - Provides options for prednisone and methylprednisolone protocols.
     - Includes optional diphenhydramine dosing.
 
+17. **NASCET Calculator**
+    Description: Calculates the North American Symptomatic Carotid Endarterectomy Trial (NASCET) value for carotid artery stenosis.
+    Example inputs:
+    ```
+    Distal ICA: 5mm, stenosis: 2mm
+    5 mm, 0.2 cm
+    The narrowest lumen measures 2 mm. The distal lumen measures 5 mm.
+    The tightest lumen measures 0.3 cm. The patent lumen measures 9 mm.
+    ```
+    Notes: 
+    - Accepts measurements in mm or cm.
+    - Can handle various descriptive terms for stenosis (e.g., "narrowest", "tightest") and normal lumen (e.g., "distal", "patent").
+    - Intelligently infers which measurement is the stenosis (smaller) and which is the distal ICA (larger) when labels are unclear.
+    - Provides NASCET percentage and interpretation (mild, moderate, or severe stenosis).
+    - Includes citation for the NASCET study when citations are enabled.
+
 ## Installation and Usage
 
 The script does not require installation on a hospital-owned workstation. However, you may or may not have permission to download .exe files.
