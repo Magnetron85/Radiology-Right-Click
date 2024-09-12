@@ -63,6 +63,11 @@ global g_arteryNames := {"lm": "Left Main"
                         ,"total": "Total"}
 global g_levenshteinThreshold := 1.5
 global g_ocrAttempts := 3  ; Number of OCR attempts
+global CalciumScoreMonitor := 1
+global CalciumScoreX := 0
+global CalciumScoreY := 0
+global CalciumScoreWidth := 0
+global CalciumScoreHeight := 0
 
 ; Initialize GDI+
 If !pToken := Gdip_Startup()
@@ -101,6 +106,11 @@ LoadPreferencesFromFile() {
 		IniRead, ShowContrastPremedication, %preferencesFile%, Calculations, ShowContrastPremedication, 1
 		IniRead, ShowFleischnerCriteria, %preferencesFile%, Calculations, ShowFleischnerCriteria, 1
 		IniRead, ShowNASCETCalculator, %preferencesFile%, Calculations, ShowNASCETCalculator, 1
+		IniRead, CalciumScoreMonitor, %preferencesFile%, CalciumScore, Monitor, 1
+		IniRead, CalciumScoreX, %preferencesFile%, CalciumScore, X, 0
+		IniRead, CalciumScoreY, %preferencesFile%, CalciumScore, Y, 0
+		IniRead, CalciumScoreWidth, %preferencesFile%, CalciumScore, Width, 0
+		IniRead, CalciumScoreHeight, %preferencesFile%, CalciumScore, Height, 0
     } else {
         MsgBox, Preferences file not found: %preferencesFile%. File will be created if preferences are edited.
     }
@@ -1377,8 +1387,19 @@ ShowPreferences() {
 	Gui, Add, Checkbox, x10 y480 w200 vShowContrastPremedication Checked%ShowContrastPremedication%,  Contrast Premedication
 	Gui, Add, Checkbox, x10 y510 w200 vShowFleischnerCriteria Checked%ShowFleischnerCriteria%, Fleischner Criteria
 	Gui, Add, Checkbox, x10 y540 w200 vShowNASCETCalculator Checked%ShowNASCETCalculator%, NASCET Calculator
-	Gui, Add, Text, x10 y580 w200, Pause Duration (current: %currentPauseDuration%):
-    Gui, Add, DropDownList, x10 y620 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
+	Gui, Add, Text, x10 y570 w200, Calcium Score Table Location:
+    Gui, Add, Text, x10 y600 w100, Monitor:
+    Gui, Add, Edit, x120 y600 w80 vCalciumScoreMonitor, %CalciumScoreMonitor%
+    Gui, Add, Text, x10 y630 w100, X:
+    Gui, Add, Edit, x120 y630 w80 vCalciumScoreX, %CalciumScoreX%
+    Gui, Add, Text, x10 y660 w100, Y:
+    Gui, Add, Edit, x120 y660 w80 vCalciumScoreY, %CalciumScoreY%
+    Gui, Add, Text, x10 y690 w100, Width:
+    Gui, Add, Edit, x120 y690 w80 vCalciumScoreWidth, %CalciumScoreWidth%
+    Gui, Add, Text, x10 y720 w100, Height:
+    Gui, Add, Edit, x120 y720 w80 vCalciumScoreHeight, %CalciumScoreHeight%
+	Gui, Add, Text, x10 y750 w200, Pause Length (cur: %currentPauseDuration%):
+    Gui, Add, DropDownList, x10 y780 w200 vPauseDurationChoice, 3 minutes|10 minutes|30 minutes|1 hour|10 hours
     if (PauseDuration = 180000)
         GuiControl, Choose, PauseDurationChoice, 1
     else if (PauseDuration = 600000)
@@ -1389,9 +1410,9 @@ ShowPreferences() {
         GuiControl, Choose, PauseDurationChoice, 4
     else if (PauseDuration = 36000000)
         GuiControl, Choose, PauseDurationChoice, 5
-    Gui, Add, Button, x60 y670 w100 gSavePreferences, Save
+    Gui, Add, Button, x60 y820 w100 gSavePreferences, Save
     
-    Gui, Show, w220 h770
+    Gui, Show, w220 h920
 }
 
 
@@ -1405,6 +1426,7 @@ SavePreferences:
     global PauseDuration, DarkMode
 	global ShowArterialAge, ShowCitations
 	global ShowContrastPremedication
+	
 
     if (PauseDurationChoice = "3 minutes")
         PauseDuration := 180000
@@ -1416,7 +1438,13 @@ SavePreferences:
         PauseDuration := 3600000
     else if (PauseDurationChoice = "10 hours")
         PauseDuration := 36000000
-
+		
+    CalciumScoreMonitor := CalciumScoreMonitor
+    CalciumScoreX := CalciumScoreX
+    CalciumScoreY := CalciumScoreY
+    CalciumScoreWidth := CalciumScoreWidth
+    CalciumScoreHeight := CalciumScoreHeight
+	
     SavePreferencesToFile()
     Gui, Destroy
 return
@@ -1447,6 +1475,11 @@ SavePreferencesToFile() {
 	IniWrite, %ShowContrastPremedication%, %A_ScriptDir%\preferences.ini, Calculations, ShowContrastPremedication
 	IniWrite, %ShowFleischnerCriteria%, %A_ScriptDir%\preferences.ini, Calculations, ShowFleischnerCriteria
 	IniWrite, %ShowNASCETCalculator%, %A_ScriptDir%\preferences.ini, Calculations, ShowNASCETCalculator
+	IniWrite, %CalciumScoreMonitor%, %A_ScriptDir%\preferences.ini, CalciumScore, Monitor
+    IniWrite, %CalciumScoreX%, %A_ScriptDir%\preferences.ini, CalciumScore, X
+    IniWrite, %CalciumScoreY%, %A_ScriptDir%\preferences.ini, CalciumScore, Y
+    IniWrite, %CalciumScoreWidth%, %A_ScriptDir%\preferences.ini, CalciumScore, Width
+    IniWrite, %CalciumScoreHeight%, %A_ScriptDir%\preferences.ini, CalciumScore, Height
 }
 
 PreferencesGuiClose:
@@ -2363,7 +2396,21 @@ LevenshteinDistance(s, t) {
 }
 
 CaptureCalciumScore() {
-    text := OCR()
+    global CalciumScoreMonitor, CalciumScoreX, CalciumScoreY, CalciumScoreWidth, CalciumScoreHeight
+
+    if (CalciumScoreMonitor > 0 && CalciumScoreWidth > 0 && CalciumScoreHeight > 0) {
+        ; Use the specified monitor and coordinates
+        SysGet, Mon, Monitor, %CalciumScoreMonitor%
+        x := MonLeft + CalciumScoreX
+        y := MonTop + CalciumScoreY
+        w := CalciumScoreWidth
+        h := CalciumScoreHeight
+
+        text := OCR([x, y, w, h])
+    } else {
+        ; Use the current functionality (user selection)
+        text := OCR()
+    }
 
     if (text == "")
         return {report: "No text captured", warning: ""}
@@ -2446,7 +2493,7 @@ ParseCalciumScore(text) {
         Loop, % Min(arteries.Length(), scores.Length())
         {
             arteryName := arteries[A_Index]
-            score := Ceil(scores[A_Index]) ; Round up to nearest whole number
+            score := Round(scores[A_Index]) ; Round to nearest integer
             mappedName := FindBestMatch(arteryName, g_arteryNames)
             
             if (mappedName && mappedName != "Total") {
