@@ -168,8 +168,8 @@ Below are detailed descriptions of each available function, along with example i
     - Requires Vis2 OCR for AHK.
     - Tested with syngo.via.
     - Attempts to correct for common OCR errors.
-    - User can definte the coordinates of their syngo.via table and size in preferences. Note: leave monitor set to 1 if coordinates are global (this is often the case if using Windows Spy to get the    
-      coordinates).
+    - User can define the coordinates of their syngo.via table (x and y pixel values at top left of table) and size (width and height of table in pixel values) in preferences. 
+    - Note: leave monitor set to 1 if coordinates are global (this is often the case if using Windows Spy to get the coordinate).
 
 15. **Fleischner 2017 Recommendations**
     Description: Provides Fleischner Society 2017 recommendations for pulmonary nodules.
