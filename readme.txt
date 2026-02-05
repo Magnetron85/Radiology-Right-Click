@@ -201,7 +201,7 @@ To contribute:
 
 ## License
 
-GNU General Public License v3.0
+GPL - free for personal use, commercial use requires a license.
 
 ## Disclaimer
 
