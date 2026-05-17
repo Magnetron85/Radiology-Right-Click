@@ -1,0 +1,31 @@
+# User state -- never commit
+preferences.json
+preferences.backup.json
+preferences.ini
+preferences.ini.imported
+preferences*.tmp
+
+# Local references folder (may contain copyrighted PDFs)
+/References/
+/references/
+
+# v1 reference kept locally for porting; not part of the v2 release
+/_v1_reference/
+
+# Compiled binary -- ship via GitHub Releases, not the source tree
+RightClick.exe
+*.exe
+
+# Test artifacts and local diagnostics
+tests/test_output.txt
+tests/prefs_diagnostic.txt
+tests/test_prefs.ahk
+
+# Tooling / IDE / OS clutter
+.claude/
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+*~
+~$*
