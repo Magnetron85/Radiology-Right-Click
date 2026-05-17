@@ -21,11 +21,8 @@ tests/test_output.txt
 tests/prefs_diagnostic.txt
 tests/test_prefs.ahk
 
-# Tooling / IDE / OS clutter
-.claude/
-.vscode/
-.idea/
-Thumbs.db
-Desktop.ini
+# Misc
+*.tmp
+*.bak
 *~
 ~$*
