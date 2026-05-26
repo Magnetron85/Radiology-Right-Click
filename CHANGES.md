@@ -1,3 +1,44 @@
+# v2.0 -> v2.1 changes
+
+v2.1 adds a second class of calculator -- guided form-based classifiers for the major ACR Reporting and Data Systems and incidental-findings white papers -- alongside the v2.0 text-parse calculators.
+
+## New calculators (form-based RADS / incidental-findings classifiers)
+
+Twelve new classifiers, each pre-filled from the selected text and completed in a dialog:
+
+- **Bosniak** cystic renal mass (v2019) -- Silverman et al. *Radiology* 2019.
+- **Gallbladder Polyp** (SRU 2022) -- Kamaya et al. *Radiology* 2022.
+- **LI-RADS** CT/MRI (v2018) -- Chernyak et al. *Radiology* 2018.
+- **US LI-RADS** (v2024) -- ACR Ultrasound Surveillance.
+- **Incidental Adrenal** (ACR 2017) -- Mayo-Smith et al. *JACR* 2017.
+- **Incidental Thyroid** (ACR 2015) -- Hoang et al. *JACR* 2015.
+- **ACR TI-RADS** -- Tessler et al. *JACR* 2017.
+- **Kyoto IPMN** (2024) -- Ohtsuka et al. *Pancreatology* 2024.
+- **Lung-RADS** (v2022) -- ACR Committee on Lung-RADS.
+- **O-RADS MRI** -- Thomassin-Naggara et al. *JAMA Netw Open* 2020.
+- **O-RADS US** (v2022) -- Andreotti et al. *Radiology* 2020.
+- **PI-RADS** (v2.1) -- Turkbey et al. *Eur Urol* 2019.
+
+## New structure
+
+- `lib/FormGui.ahk` -- shared guided-input form used by all twelve classifiers.
+- `lib/CalcResult.ahk` -- structured result object (impression / classification / recommendation / findings / methodology / citations / advisories), defining the report-ready output contract.
+- `lib/TextScan.ahk` -- selected-text parsing and form pre-fill helpers.
+
+## Menu and display
+
+- **New "grouped" (anatomical) menu sorting, now the default** -- calculators are bucketed into anatomical submenus (Renal, Liver / biliary, Adrenal, Thyroid / neck, Pancreas, Lung, Cardiovascular, Adnexal / OB-Gyn, Prostate, Volume + measurement, Numeric, Scheduling). `alphabetical`, `frequency`, and `none` remain available.
+- New display toggles: **Show malignancy risk** (per-category validated risk percentages, e.g. TI-RADS) and **Show methodology** (the selected-inputs + reasoning block). Each result popup also has a local methodology checkbox to override per-result without changing the pref.
+
+## Security / quality
+
+- **Citation links now validated.** The "Open reference in browser" links on result popups route through the same `IsValidURL` http/https allowlist that user-supplied reference URLs use, so every `Run()` in the app is validated.
+- **`.gitignore` hardening** -- excludes `.claude/` (local agent settings), `debug.log` / `*.log` (may contain captured clipboard text when debug logging is on), the whole dev-only `tests/` tree, `IMPRESSION_STYLE.md` (working draft), Python cruft, and OS junk.
+- **`SECURITY.md`** documents the debug-logging caveat (the "stores no PHI" guarantee holds only with debug logging off).
+- README documents all twelve new classifiers and the corrected module layout.
+
+---
+
 # v1.22-local -> v2.0 changes
 
 The calculation math, regexes, decision thresholds, and citations all match v1.22 verbatim. The differences below are structural, presentational, or security/quality fixes.

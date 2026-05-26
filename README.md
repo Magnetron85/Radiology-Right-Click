@@ -22,6 +22,7 @@ A right-click context menu of measurement and analysis helpers for radiology dic
   - [Obstetric / gynecologic](#obstetric--gynecologic)
   - [Numeric utilities](#numeric-utilities)
   - [Scheduling](#scheduling)
+- [RADS and incidental-findings classifiers (v2.1)](#rads-and-incidental-findings-classifiers-v21)
 - [Preferences](#preferences)
 - [Saved references](#saved-references)
 - [Configuring target apps](#configuring-target-apps)
@@ -357,6 +358,198 @@ The text-selection part of the workflow doesn't apply here — this calculator i
 
 ---
 
+## RADS and incidental-findings classifiers (v2.1)
+
+v2.1 adds twelve guided classifiers covering the major ACR Reporting and Data Systems and the ACR incidental-findings white papers. Unlike the text-parse calculators above, these **pre-fill a form from the selected text and then open a dialog** where you confirm or complete the inputs before submitting. The result popup returns a report-ready impression, with optional methodology and citation sections (toggle in Preferences). As with every calculator here, the output must be independently verified before use — see the disclaimer at the top.
+
+The example below shows the report-ready impression line for each; the live popup also includes the category breakdown, methodology, and citation.
+
+### Renal
+
+#### Bosniak (cystic renal mass, v2019)
+Classifies a cystic renal mass into Bosniak 2019 categories I, II, IIF, III, or IV from wall/septa thickness, enhancement, and convex protrusion (nodule) size/margins, with modality-specific features (CT hyperattenuation; MRI T1/T2 signal). Reports category, malignancy-risk range, and management.
+
+Reference: Silverman SG, Pedrosa I, Ellis JH, et al. *Radiology.* 2019;292(2):475-488.
+
+Selected text:
+```
+Simple-appearing cyst in the left kidney with thin nonenhancing septa.
+```
+Result popup includes (after submitting the dialog -- CT, 2 thin septa <=2 mm, no enhancement):
+```
+Bosniak II renal cyst (few thin septa), reported malignancy risk <1%; no follow-up recommended per Bosniak v2019.
+```
+
+### Liver / biliary
+
+#### Gallbladder Polyp (SRU 2022)
+Stratifies an incidentally detected gallbladder polyp by size and morphology (pedunculated thin/thick stalk, sessile, ball-on-wall, adjacent wall thickening) into extremely low / low / indeterminate risk or a surgical-consultation indication, with the SRU 2022 follow-up schedule. Exclusion flags (PSC, suspicious features, poor visualization) report that the algorithm does not apply.
+
+Reference: Kamaya A, Fung C, Szpakowski JL, et al. *Radiology.* 2022;305(2):277-289.
+
+Selected text:
+```
+12 mm pedunculated polyp on the gallbladder wall with a thick stalk.
+```
+Result popup includes:
+```
+12 mm pedunculated thick-stalk gallbladder polyp, low risk per SRU 2022; recommend follow-up US at 6, 12, 24, and 36 months.
+```
+
+#### LI-RADS (CT / MRI 2018)
+Applies the LI-RADS v2018 diagnostic algorithm to a liver observation in an at-risk patient, returning LR-1 through LR-5, LR-M, LR-TIV, or LR-NC from major features (non-rim APHE, size, non-peripheral washout, enhancing capsule, threshold growth, tumor in vein), LR-M criteria, benign overrides, and ancillary-feature counts.
+
+Reference: Chernyak V, Fowler KJ, Kamaya A, et al. *Radiology.* 2018;289(3):816-830.
+
+Selected text:
+```
+18 mm arterial phase hyperenhancing mass with non-peripheral washout in segment 6.
+```
+Result popup includes:
+```
+18 mm hepatic observation, LR-5 (definitely HCC) per LI-RADS v2018; multidisciplinary discussion recommended.
+```
+
+#### US LI-RADS (v2024)
+Categorizes a surveillance hepatic ultrasound as US-1 (negative), US-2 (subthreshold), or US-3 (positive) from focal-observation presence/size/benignity, new vascular thrombus, and parenchymal distortion, and reports the visualization score (A/B/C) with its management.
+
+Reference: American College of Radiology. *US LI-RADS v2024 -- Ultrasound Surveillance.*
+
+Selected text:
+```
+15 mm solid focal observation in the right hepatic lobe; surveillance ultrasound.
+```
+Result popup includes:
+```
+Surveillance US US-3 (positive), visualization A, per US LI-RADS v2024; diagnostic multiphase CT or MRI recommended.
+```
+
+### Adrenal
+
+#### Incidental Adrenal (ACR 2017)
+Works up an incidental adrenal mass per the ACR 2017 white paper, branching on known extra-adrenal malignancy, CT attenuation (auto-computes absolute and relative washout when unenhanced/enhanced/delayed HU are entered), MRI chemical shift, prior stability, size, and morphology. Avid enhancement (>=110 HU) adds a pheochromocytoma caution.
+
+Reference: Mayo-Smith WW, Song JH, Boland GL, et al. *J Am Coll Radiol.* 2017;14(8):1038-1044.
+
+Selected text:
+```
+2.5 cm left adrenal nodule, unenhanced 8 HU. No known malignancy.
+```
+Result popup includes:
+```
+25 mm incidental adrenal mass, BENIGN per ACR Incidental Findings 2017; no imaging follow-up required (lipid-rich adenoma, unenhanced 8 HU <=10 HU).
+```
+
+### Thyroid / neck
+
+#### Incidental Thyroid (ACR 2015)
+Decides whether an incidentally detected thyroid nodule warrants dedicated ultrasound, using the ACR 2015 size/age thresholds (>=1.0 cm if age <35, >=1.5 cm if age >=35). Clinical risk factors, suspicious features, and focal FDG uptake override the size criteria; limited life expectancy yields a no-workup recommendation.
+
+Reference: Hoang JK, Langer JE, Middleton WD, et al. *J Am Coll Radiol.* 2015;12(2):143-150.
+
+Selected text:
+```
+1.8 cm thyroid nodule incidentally noted on CT in a 58-year-old.
+```
+Result popup includes:
+```
+1.8 cm incidental thyroid nodule; dedicated thyroid ultrasound recommended per ACR 2015 (age >=35 with nodule >=1.5 cm).
+```
+
+#### ACR TI-RADS
+Scores a thyroid nodule with the ACR TI-RADS point system (composition, echogenicity, shape, margin, echogenic foci), maps the total to TR1-TR5, and gives the size-dependent FNA / follow-up recommendation. Cystic and spongiform nodules force TR1.
+
+Reference: Tessler FN, Middleton WD, Grant EG, et al. *J Am Coll Radiol.* 2017;14(5):587-595.
+
+Selected text:
+```
+1.5 cm solid hypoechoic thyroid nodule with punctate echogenic foci, wider-than-tall, smooth margins.
+```
+Result popup includes (solid +2, hypoechoic +2, punctate +3 = 7 pts):
+```
+1.5 cm thyroid nodule, TR5 (highly suspicious) per ACR TI-RADS 2017; FNA recommended (>=1.0 cm for TR5).
+```
+
+### Pancreas
+
+#### Kyoto IPMN (2024)
+Applies the 2024 Kyoto guidelines for IPMN, separating high-risk stigmata (enhancing mural nodule >=5 mm, MPD >=10 mm, obstructive jaundice, suspicious/positive cytology) from worrisome features (cyst >=30 mm, nodule <5 mm, wall thickening, MPD 5-9 mm, abrupt duct change, lymphadenopathy, growth >=2.5 mm/yr, elevated CA 19-9, new diabetes, acute pancreatitis), and reports the category and management.
+
+Reference: Ohtsuka T, Fernandez-del Castillo C, Furukawa T, et al. *Pancreatology.* 2024;24(2):255-270.
+
+Selected text:
+```
+22 mm branch-duct pancreatic cyst with a 6 mm enhancing mural nodule.
+```
+Result popup includes:
+```
+22 mm branch-duct IPMN with 1 high-risk feature (enhancing mural nodule 6 mm) per Kyoto 2024; recommend surgical consultation / multidisciplinary discussion.
+```
+
+### Lung / pulmonary
+
+#### Lung-RADS (v2022)
+Assigns a Lung-RADS v2022 category (0, 1, 2, 3, 4A, 4B, 4X, with optional S modifier) to a screening pulmonary nodule from lesion type, mean and solid-component diameter, screening round, prior comparison and growth, benign-feature overrides, and suspicious features (spiculation, lymphadenopathy, etc.).
+
+Reference: ACR Committee on Lung-RADS. *Lung CT Screening Reporting and Data System (Lung-RADS) v2022.* ACR, November 2022.
+
+Selected text:
+```
+10 mm solid spiculated nodule in the right upper lobe on baseline screening CT.
+```
+Result popup includes (solid 10 mm baseline = 4A, spiculation upgrades to 4X):
+```
+10 mm solid pulmonary nodule, Lung-RADS 4X per Lung-RADS v2022; recommend diagnostic CT, PET/CT, or tissue sampling.
+```
+
+### Obstetric / gynecologic
+
+#### O-RADS MRI
+Risk-stratifies an adnexal lesion on MRI into O-RADS MRI scores 1-5 from lesion type, wall/septal enhancement and fluid type, solid-tissue T2/DWI signal, DCE time-intensity curve, and peritoneal nodularity (which overrides to Score 5). Reports the score, malignancy risk, and management.
+
+Reference: Thomassin-Naggara I, Poncelet E, Jalaguier-Coudray A, et al. *JAMA Netw Open.* 2020;3(1):e1919896.
+
+Selected text:
+```
+Adnexal lesion with enhancing solid tissue and a type 3 time-intensity curve.
+```
+Result popup includes:
+```
+Adnexal lesion, O-RADS MRI 5 (high risk) per O-RADS MRI 2020; gynecologic oncology referral.
+```
+
+#### O-RADS US (v2022)
+Risk-stratifies an adnexal lesion on ultrasound into O-RADS US scores 1-5 from menstrual status, lesion type and size, inner contour, solid component, classic benign patterns (dermoid, endometrioma, hemorrhagic cyst, hydrosalpinx), papillary-projection count, and color score. Ascites or peritoneal nodularity upgrades any score >=3 to 5.
+
+Reference: Andreotti RF, Timmerman D, Strachowski LM, et al. *Radiology.* 2020;294(1):168-185.
+
+Selected text:
+```
+Postmenopausal anechoic simple cyst measuring 5 cm with a thin smooth wall.
+```
+Result popup includes:
+```
+5.0 cm adnexal lesion, O-RADS US 2 (almost certainly benign) per O-RADS 2022; no follow-up if <10 cm.
+```
+
+### Prostate
+
+#### PI-RADS (v2.1)
+Scores a prostate MRI lesion per PI-RADS v2.1 using the dominant sequence for the lesion's zone (DWI in the peripheral zone, with DCE upgrading an equivocal DWI=3 to 4; T2 in the transition zone, with DWI as a tiebreaker). Score-4 morphology is promoted to PI-RADS 5 when the lesion is >=1.5 cm or shows definite extraprostatic extension.
+
+Reference: Turkbey B, Rosenkrantz AB, Haider MA, et al. *Eur Urol.* 2019;76(3):340-351.
+
+Selected text:
+```
+Peripheral zone lesion, 12 mm, markedly hypointense on DWI with low ADC.
+```
+Result popup includes:
+```
+12 mm peripheral-zone prostate lesion, PI-RADS 4 (csPCa likely) per PI-RADS v2.1; targeted biopsy recommended.
+```
+
+---
+
 ## Preferences
 
 `Preferences` at the bottom of the right-click menu opens the settings window:
@@ -364,7 +557,7 @@ The text-selection part of the workflow doesn't apply here — this calculator i
 - **Dark mode** — flips title bars, popup menus, and dialogs to a dark palette (uses Windows' native immersive dark mode plus the undocumented `uxtheme!SetPreferredAppMode` for popup menus, the same mechanism File Explorer and RegEdit use).
 - **Show citations in output** — toggles the in-line journal citations on each result.
 - **Show arterial age** — toggles the MESA arterial age line on the calcium score output.
-- **Calculator visibility** — 15 checkboxes, one per toggleable calculator. Compare / Sort Measurement Sizes are always visible.
+- **Calculator visibility** — one checkbox per toggleable calculator (including the v2.1 RADS classifiers). Compare / Sort Measurement Sizes are always visible.
 - **Menu sorting** — `alphabetical` (default, case-insensitive by title), `frequency` (most-used first, alphabetical for ties), or `none` (registry order).
 - **Right-click modifier** — `none` (plain right-click), `Ctrl` (default), `Alt`, or `Shift`. Determines what combination opens the helper menu.
 - **References...** — opens the reference manager (see below).
@@ -445,11 +638,15 @@ lib/
   Prefs.ahk                 JSON-backed preferences + v1 INI import
   Modern.ahk                Dark title bar, rounded corners, dark popup menus
   UI.ahk                    Result popup window
-  Menu.ahk                  Right-click menu build + sort
+  CalcResult.ahk            Structured result object (impression / category / citations)
+  FormGui.ahk               Guided input form used by the v2.1 RADS classifiers
+  TextScan.ahk              Selected-text parsing + form pre-fill helpers
+  Menu.ahk                  Right-click menu build + sort (text + grouped/anatomical)
   PreferencesWindow.ahk     Settings GUI + target-app editor
   References.ahk            URL / file reference manager
   Util.ahk                  Shared helpers (regex, dates, clipboard, safety)
-  calc/                     One file per calculator (13 total)
+  Debug.ahk                 Conditional logging framework (off by default)
+  calc/                     One file per calculator (25 total)
 ```
 
 ---

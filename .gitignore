@@ -24,6 +24,9 @@ RightClick.exe
 # Tests -- development only, not part of the release
 /tests/
 
+# Internal working draft -- not part of the release
+IMPRESSION_STYLE.md
+
 # Claude Code working dir -- never push any of it (personal, machine-specific)
 .claude/
 
