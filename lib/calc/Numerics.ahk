@@ -4,13 +4,81 @@
 
 #Requires AutoHotkey v2.0
 #Include ..\Util.ahk
+#Include ..\FormGui.ahk
 
 Statistics_Entry(input) {
-    return CalcStatistics(input)
+    ShowStatisticsDialog(input)
+    return ""
 }
 
 Range_Entry(input) {
-    return CalcRange(input)
+    ShowRangeDialog(input)
+    return ""
+}
+
+ShowStatisticsDialog(text := "") {
+    form := RadsForm("Statistics", 520)
+    form.Header("Numbers")
+    form.Note("Paste or type the numbers (comma- or newline-separated). Slice / sample / observation labels are ignored.")
+    form.TextArea("Nums", "Numbers:", 120, text)
+    form.SetSubmit(Statistics_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+Statistics_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    if (Trim(v.Nums) = "")
+        return MakeResult({ impression: "Please enter at least one number.",
+                            error: "Empty input" })
+
+    nums := ExtractNumbers(v.Nums)
+    if (nums.Length = 0)
+        return MakeResult({ impression: "No numbers found in input.",
+                            error: "No numbers parsed" })
+
+    ; Impression is a single prose sentence summarizing the headline stats.
+    ; The full label list (Count/Sum/Mean/Median/...) goes in methodology.
+    impression := "Statistics (n=" nums.Length "): mean " Round(Mean(nums), 1)
+                . ", median " Round(Median(nums), 1)
+                . ", range " Round(Min(nums*), 1) "-" Round(Max(nums*), 1)
+    if (nums.Length >= 9)
+        impression .= ", SD " Round(StdDev(nums), 1)
+    impression .= "."
+
+    return MakeResult({
+        classification: "Statistics",
+        impression:     impression,
+        recommendation: "",
+        methodology:    CalcStatistics(v.Nums),
+        citations:      [],
+        echo:           g_LastSelectedText
+    })
+}
+
+ShowRangeDialog(text := "") {
+    form := RadsForm("Number Range", 520)
+    form.Header("Numbers")
+    form.TextArea("Nums", "Numbers (optionally with units):", 100, text)
+    form.SetSubmit(Range_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+Range_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    if (Trim(v.Nums) = "")
+        return MakeResult({ impression: "Please enter at least one number.",
+                            error: "Empty input" })
+    body := CalcRange(v.Nums)
+    return MakeResult({
+        classification: "Range",
+        impression:     body,
+        recommendation: "",
+        methodology:    "",
+        citations:      [],
+        echo:           g_LastSelectedText
+    })
 }
 
 CalcStatistics(input) {

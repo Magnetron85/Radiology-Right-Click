@@ -3,19 +3,46 @@
 ; ============================================================
 
 #Requires AutoHotkey v2.0
+#Include Debug.ahk
 
 ; --- text / clipboard --------------------------------------------------------
 
-GetSelectedText(timeout := 0.15) {
+GetSelectedText(timeout := 0.4) {
+    callT0 := A_TickCount
     saved := ClipboardAll()
     A_Clipboard := ""
-    Send "^c"
-    if !ClipWait(timeout, 1) {
+
+    ; Release physically-held modifier keys so the subsequent Ctrl+C
+    ; goes through cleanly. Only release keys that are actually held --
+    ; releasing modifiers that aren't held would still send KeyUp events
+    ; to the focused app. MS Word in particular treats a standalone
+    ; Alt-up as a ribbon-menu activation (the "FEV HLBGIKO RPUS" KeyTip
+    ; letters), which intercepts the subsequent Ctrl+C.
+    for key in ["LCtrl","RCtrl","LAlt","RAlt","LShift","RShift","LWin","RWin"] {
+        if GetKeyState(key, "P")
+            SendEvent "{" key " up}"
+    }
+    Sleep 20
+    ; Use SendEvent (not SendInput) -- AHK v1 defaulted to SendEvent and
+    ; worked with apps that have low-level keyboard hooks (PowerScribe
+    ; and other dictation systems). AHK v2 defaults to SendInput, which
+    ; is faster but bypasses the standard Windows message queue --
+    ; dictation hooks may not see it, leaving the clipboard empty.
+    SendEvent "^c"
+
+    waited := ClipWait(timeout, 1)
+    elapsed := A_TickCount - callT0
+    if !waited {
         A_Clipboard := saved
+        Debug.LogHex("capture"
+            , Format("elapsed={}ms clipWait=TIMEOUT len=0", elapsed), "")
         return ""
     }
     text := A_Clipboard
     A_Clipboard := saved
+    Debug.LogHex("capture"
+        , Format("elapsed={}ms clipWait=ok len={}", elapsed, StrLen(text))
+        , text)
     return text
 }
 

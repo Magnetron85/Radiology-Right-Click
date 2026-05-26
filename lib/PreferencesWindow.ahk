@@ -18,16 +18,28 @@ global CALC_COL1 := [
     ["menstrualPhase",        "Menstrual Phase"],
     ["adrenalWashout",        "Adrenal Washout"],
     ["thymusChemicalShift",   "Thymus Chemical Shift"],
-    ["hepaticSteatosis",      "Hepatic Steatosis"]
-]
-global CALC_COL2 := [
+    ["hepaticSteatosis",      "Hepatic Steatosis"],
     ["mriLiverIron",          "MRI Liver Iron Content"],
     ["statistics",            "Statistics"],
     ["numberRange",           "Number Range"],
     ["calciumScorePercentile","Calcium Score Percentile"],
     ["contrastPremedication", "Contrast Premedication"],
-    ["fleischnerCriteria",    "Fleischner Criteria"],
-    ["nascetCalculator",      "NASCET"]
+    ["fleischnerCriteria",    "Fleischner Criteria"]
+]
+global CALC_COL2 := [
+    ["nascetCalculator",      "NASCET"],
+    ["bosniak",               "Bosniak (renal cyst)"],
+    ["gbPolyp",               "Gallbladder Polyp"],
+    ["incidentalAdrenal",     "Incidental Adrenal Mass"],
+    ["incidentalThyroid",     "Incidental Thyroid Nodule"],
+    ["kyotoIpmn",             "Kyoto IPMN"],
+    ["lirads",                "LI-RADS (CT/MRI)"],
+    ["lungRads",              "Lung-RADS"],
+    ["oradsMri",              "O-RADS MRI"],
+    ["oradsUs",               "O-RADS Ultrasound"],
+    ["pirads",                "PI-RADS v2.1"],
+    ["tirads",                "TI-RADS"],
+    ["usLirads",              "US LI-RADS"]
 ]
 
 ShowPreferencesWindow() {
@@ -37,7 +49,7 @@ ShowPreferencesWindow() {
     MouseGetPos(&mx, &my)
     work := GetWorkAreaAt(mx, my)
     desiredW := 580
-    desiredH := 560   ; dropped from 640 after removing the custom-order field
+    desiredH := 700   ; taller after 13 new RADS calculator toggles in col 2
     fit := FitWindow(desiredW, desiredH, mx + 12, my + 12, work, 24)
 
     g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "RightClick Preferences")
@@ -54,15 +66,28 @@ ShowPreferencesWindow() {
     ; --- DISPLAY
     _AddHeader(g, palette, col1X, y, "Display")
     y += 26
-    cbDark := g.Add("Checkbox", "x" col1X " y" y " w" cbW " vDarkMode", "Dark mode")
+    cbDark := g.Add("Checkbox"
+        , "x" col1X " y" y " w" cbW " vDarkMode c" palette["fg"]
+        , "Dark mode")
     cbDark.Value := dark ? 1 : 0
-    cbCit  := g.Add("Checkbox", "x" col2X " y" y " w" cbW " vShowCitations"
+    cbCit  := g.Add("Checkbox"
+        , "x" col2X " y" y " w" cbW " vShowCitations c" palette["fg"]
         , "Show citations in output")
     cbCit.Value := Prefs.Get("display", "showCitations", true) ? 1 : 0
     y += 24
-    cbArt := g.Add("Checkbox", "x" col1X " y" y " w" cbW " vShowArterialAge"
+    cbArt := g.Add("Checkbox"
+        , "x" col1X " y" y " w" cbW " vShowArterialAge c" palette["fg"]
         , "Show arterial age (calcium score)")
     cbArt.Value := Prefs.Get("display", "showArterialAge", true) ? 1 : 0
+    cbRisk := g.Add("Checkbox"
+        , "x" col2X " y" y " w" cbW " vShowMalignancyRisk c" palette["fg"]
+        , "Show malignancy risk % (when published)")
+    cbRisk.Value := Prefs.Get("display", "showMalignancyRisk", true) ? 1 : 0
+    y += 24
+    cbMethod := g.Add("Checkbox"
+        , "x" col1X " y" y " w" cbW " vShowMethodology c" palette["fg"]
+        , "Show methodology in result")
+    cbMethod.Value := Prefs.Get("display", "showMethodology", true) ? 1 : 0
     y += 32
 
     ; --- CALCULATORS (two-column grid)
@@ -71,13 +96,15 @@ ShowPreferencesWindow() {
     gridStartY := y
     for i, entry in CALC_COL1 {
         cb := g.Add("Checkbox"
-            , "x" col1X " y" (gridStartY + (i-1)*24) " w" cbW " vCalc_" entry[1]
+            , "x" col1X " y" (gridStartY + (i-1)*24) " w" cbW
+              . " vCalc_" entry[1] " c" palette["fg"]
             , entry[2])
         cb.Value := Prefs.Get("calculations", entry[1], true) ? 1 : 0
     }
     for i, entry in CALC_COL2 {
         cb := g.Add("Checkbox"
-            , "x" col2X " y" (gridStartY + (i-1)*24) " w" cbW " vCalc_" entry[1]
+            , "x" col2X " y" (gridStartY + (i-1)*24) " w" cbW
+              . " vCalc_" entry[1] " c" palette["fg"]
             , entry[2])
         cb.Value := Prefs.Get("calculations", entry[1], true) ? 1 : 0
     }
@@ -89,8 +116,8 @@ ShowPreferencesWindow() {
     _AddHeader(g, palette, col2X, y, "Right-click modifier")
     y += 26
 
-    sortChoices := ["alphabetical","frequency","none"]
-    sortVal := Prefs.Get("menu", "sortingMethod", "alphabetical")
+    sortChoices := ["grouped","alphabetical","frequency","none"]
+    sortVal := Prefs.Get("menu", "sortingMethod", "grouped")
     sortIdx := 1
     for i, v in sortChoices {
         if (v = sortVal)
@@ -141,6 +168,7 @@ ShowPreferencesWindow() {
     ApplyModernChrome(g, dark)
     finalH := Min(y + 60, fit.h)  ; cap at fitted height
     g.Show("x" fit.x " y" fit.y " w" fit.w " h" finalH)
+    WinActivate("ahk_id " g.Hwnd)
 }
 
 _AddHeader(g, palette, x, y, label) {
@@ -164,9 +192,11 @@ _CloseHandler(g, *) {
 _SaveHandler(g, *) {
     saved := g.Submit(false)
 
-    Prefs.Set("display", "darkMode",        !!saved.DarkMode)
-    Prefs.Set("display", "showCitations",   !!saved.ShowCitations)
-    Prefs.Set("display", "showArterialAge", !!saved.ShowArterialAge)
+    Prefs.Set("display", "darkMode",           !!saved.DarkMode)
+    Prefs.Set("display", "showCitations",      !!saved.ShowCitations)
+    Prefs.Set("display", "showArterialAge",    !!saved.ShowArterialAge)
+    Prefs.Set("display", "showMalignancyRisk", !!saved.ShowMalignancyRisk)
+    Prefs.Set("display", "showMethodology",    !!saved.ShowMethodology)
 
     for entry in CALC_COL1
         Prefs.Set("calculations", entry[1], !!saved.%"Calc_" entry[1]%)
@@ -249,6 +279,7 @@ ShowTargetAppsEditor() {
 
     ApplyModernChrome(g, dark)
     g.Show("x" fit.x " y" fit.y " w" fit.w " h" fit.h)
+    WinActivate("ahk_id " g.Hwnd)
 }
 
 _SaveTargetApps(g, *) {

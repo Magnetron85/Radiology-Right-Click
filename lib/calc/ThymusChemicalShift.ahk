@@ -9,9 +9,93 @@
 
 #Requires AutoHotkey v2.0
 #Include ..\Util.ahk
+#Include ..\FormGui.ahk
 
 ThymusChemicalShift_Entry(input) {
-    return CalcThymusChemicalShift(input)
+    ShowThymusDialog(input)
+    return ""
+}
+
+ShowThymusDialog(text := "") {
+    tIp := "", tOp := "", pIp := "", pOp := ""
+    if RegExMatch(text, "i)thymus[^0-9]*?(?:in[- ]?phase|IP|T1IP)\D*(\d+)\D*(?:out[- ]?of[- ]?phase|OP|OOP|T1OP)\D*(\d+)", &m) {
+        tIp := m[1] + 0
+        tOp := m[2] + 0
+    }
+    if RegExMatch(text, "i)paraspinous[^0-9]*?(?:in[- ]?phase|IP|T1IP)\D*(\d+)\D*(?:out[- ]?of[- ]?phase|OP|OOP|T1OP)\D*(\d+)", &m) {
+        pIp := m[1] + 0
+        pOp := m[2] + 0
+    }
+
+    form := RadsForm("Thymus Chemical Shift", 460)
+    form.Header("Thymus signal")
+    form.Numeric("Tip", "In-phase (IP):", tIp)
+    form.Numeric("Top", "Out-of-phase (OP):", tOp)
+    form.Header("Paraspinous reference (optional)")
+    form.Numeric("Pip", "Paraspinous IP:", pIp)
+    form.Numeric("Pop", "Paraspinous OP:", pOp)
+    form.SetSubmit(Thymus_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+Thymus_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    if (v.Tip = "" || v.Top = "")
+        return MakeResult({ impression: "Thymus IP and OP are required.",
+                            error: "Missing thymus IP/OP" })
+
+    thIP := v.Tip + 0.0
+    thOP := v.Top + 0.0
+    sii := (thIP != 0) ? ((thIP - thOP) / thIP) * 100 : 0
+
+    psIP := (v.Pip = "") ? "" : v.Pip + 0.0
+    psOP := (v.Pop = "") ? "" : v.Pop + 0.0
+    csr := ""
+    if (psIP != "" && psOP != "") {
+        opRatio := psOP != 0 ? thOP / psOP : 0
+        ipRatio := psIP != 0 ? thIP / psIP : 0
+        csr := ipRatio != 0 ? opRatio / ipRatio : 0
+    }
+
+    interp := _InterpretThymus(csr, sii)
+    ; Strip the trailing citation that _InterpretThymus appends; citation is
+    ; now a structured field. Also strip the "Interpretation: " prefix and
+    ; trailing newlines to make the impression sentence-ready.
+    interpClean := RegExReplace(interp, "Citation:.*$",,, 1)
+    interpClean := RegExReplace(interpClean, "^Interpretation:\s*", "")
+    interpClean := RTrim(interpClean, " `t`r`n")
+
+    impression := "Thymic chemical-shift MRI: "
+    if (csr != "")
+        impression .= "CSR " Round(csr, 3) " (hyperplasia <= 0.849), "
+    impression .= "SII " Round(sii, 2) "% (hyperplasia > 8.92%). " interpClean
+    if (SubStr(impression, -1) != ".")
+        impression .= "."
+
+    method := ""
+    if form
+        method .= "Selected inputs:`n" form.FormatInputs(v)
+    method .= "`nThymus IP: " thIP ", OP: " thOP
+    method .= "`nSII = (IP - OP) / IP * 100 = " Round(sii, 2) "%"
+    if (csr != "") {
+        method .= "`nParaspinous IP: " psIP ", OP: " psOP
+        method .= "`nCSR = (Thymus OP / Paraspinous OP) / (Thymus IP / Paraspinous IP) = " Round(csr, 3)
+    }
+
+    return MakeResult({
+        classification: csr != "" ? Format("CSR {:.3f}, SII {:.2f}%", csr, sii)
+                                  : Format("SII {:.2f}%", sii),
+        impression:     impression,
+        recommendation: "",
+        methodology:    method,
+        citations:      [{ text: "Priola AM, Priola SM, Ciccone G, et al. "
+                                . "Differentiation of rebound and lymphoid thymic hyperplasia from "
+                                . "anterior mediastinal tumors with dual-echo chemical-shift MR "
+                                . "imaging in adulthood. Radiology. 2015 Jan;274(1):238-49.",
+                           url:  "https://pubs.rsna.org/doi/10.1148/radiol.14132665" }],
+        echo:           g_LastSelectedText
+    })
 }
 
 CalcThymusChemicalShift(input) {

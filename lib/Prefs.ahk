@@ -149,7 +149,17 @@ class Prefs {
             "allValues",      true,
             "darkMode",       false,
             "showCitations",  true,
-            "showArterialAge", true
+            "showArterialAge", true,
+            ; Generic toggle for any calculator that displays a validated
+            ; malignancy / cancer risk percentage from a published cohort
+            ; (e.g., TI-RADS per-TR rates from Middleton 2017). Off-by-design
+            ; if a clinician prefers points/category only without the risk %.
+            "showMalignancyRisk", true,
+            ; When true, the result popup includes a "Methodology" section
+            ; (selected inputs + reasoning). When false, only the impression
+            ; + citations are shown. The result window itself has a local
+            ; checkbox to override this per-result without mutating the pref.
+            "showMethodology", true
         )
         d["calculations"] := Map(
             "ellipsoidVolume",       true,
@@ -166,7 +176,19 @@ class Prefs {
             "calciumScorePercentile", true,
             "contrastPremedication", true,
             "fleischnerCriteria",    true,
-            "nascetCalculator",      true
+            "nascetCalculator",      true,
+            "bosniak",               true,
+            "gbPolyp",               true,
+            "incidentalAdrenal",     true,
+            "incidentalThyroid",     true,
+            "kyotoIpmn",             true,
+            "lirads",                true,
+            "lungRads",              true,
+            "oradsMri",              true,
+            "oradsUs",               true,
+            "pirads",                true,
+            "tirads",                true,
+            "usLirads",              true
         )
         d["activation"] := Map(
             "modifier", "ctrl",  ; none | ctrl | alt | shift -- ctrl-by-default so
@@ -182,7 +204,7 @@ class Prefs {
             ]
         )
         d["menu"] := Map(
-            "sortingMethod", "alphabetical"  ; none | alphabetical | frequency
+            "sortingMethod", "grouped"  ; grouped (anatomical) | alphabetical | frequency | none
         )
         d["references"] := []
         d["frequency"]  := Map()
@@ -227,6 +249,7 @@ class Prefs {
         Prefs._IniBool(ini, "Display", "DarkMode",         "display", "darkMode",       false)
         Prefs._IniBool(ini, "Display", "ShowCitations",    "display", "showCitations",  true)
         Prefs._IniBool(ini, "Display", "ShowArterialAge",  "display", "showArterialAge", true)
+        Prefs._IniBool(ini, "Display", "ShowMethodology",  "display", "showMethodology", true)
 
         ; --- [Calculations] ---
         Prefs._IniBool(ini, "Calculations", "ShowEllipsoidVolume",        "calculations", "ellipsoidVolume",        true)

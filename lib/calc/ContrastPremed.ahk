@@ -64,6 +64,7 @@ ShowContrastPremedDialog() {
     g.OnEvent("Escape", (*) => g.Destroy())
     ApplyModernChrome(g, dark)
     g.Show("x" pos.x " y" pos.y " w" w " h" h)
+    WinActivate("ahk_id " g.Hwnd)
 }
 
 _DefaultPremedDateTime() {
@@ -115,12 +116,21 @@ _ComputePremed(g) {
         out .= _FormatPremedStep(dt, -2,  "2",  2, diph)
     }
 
-    out .= "`nNote: Premedication regimens less than 4-5 hours in duration (oral or IV) have not been shown to be effective.`n"
-    out .= "If a patient is unable to take oral medication, 200 mg hydrocortisone IV may be substituted for each dose of oral prednisone in the 13-7-1 premedication regimen.`n"
-    if Prefs.Get("display","showCitations", true)
-        out .= "`nCitation: ACR Manual on Contrast Media. American College of Radiology. https://www.acr.org/Clinical-Resources/Contrast-Manual`n"
+    advisories := []
+    advisories.Push("Premedication regimens less than 4-5 hours in duration "
+                  . "(oral or IV) have not been shown to be effective.")
+    advisories.Push("If a patient is unable to take oral medication, 200 mg hydrocortisone IV "
+                  . "may be substituted for each dose of oral prednisone in the 13-7-1 regimen.")
 
-    ShowResult(out)
+    ShowResult(MakeResult({
+        classification: "Premedication schedule",
+        impression:     RTrim(out, " `t`r`n"),
+        recommendation: "",
+        advisories:     advisories,
+        methodology:    "",
+        citations:      [{ text: "ACR Manual on Contrast Media. American College of Radiology.",
+                           url:  "https://www.acr.org/Clinical-Resources/Contrast-Manual" }]
+    }))
 }
 
 _FormatPremedStep(dt, hoursOffset, label, protocol, diph) {
@@ -162,12 +172,23 @@ _ShowPremedDosages(g) {
         if diph
             out .= "- Diphenhydramine 50 mg IV, IM, or PO`n"
     }
-    out .= "`nNotes:`n"
-    out .= "- Premedication regimens less than 4-5 hours in duration (oral or IV) have not been shown to be effective.`n"
-    out .= "- If a patient is unable to take oral medication, 200 mg hydrocortisone IV may be substituted for each dose of oral prednisone in the 13-7-1 premedication regimen.`n"
-    out .= "- Diphenhydramine is considered optional. If a patient is allergic to diphenhydramine, an alternate anti-histamine without cross-reactivity may be considered, or the anti-histamine may be omitted.`n"
-    out .= "- These dosages are based on the ACR Manual on Contrast Media. Please consult with a healthcare professional for patient-specific recommendations.`n"
-    if Prefs.Get("display","showCitations", true)
-        out .= "`nCitation: ACR Manual on Contrast Media. American College of Radiology. https://www.acr.org/Clinical-Resources/Contrast-Manual`n"
-    ShowResult(out)
+    advisories := []
+    advisories.Push("Premedication regimens less than 4-5 hours in duration "
+                  . "(oral or IV) have not been shown to be effective.")
+    advisories.Push("If a patient is unable to take oral medication, 200 mg hydrocortisone IV "
+                  . "may be substituted for each dose of oral prednisone in the 13-7-1 regimen.")
+    advisories.Push("Diphenhydramine is considered optional; an alternate antihistamine without "
+                  . "cross-reactivity may be substituted or the antihistamine omitted.")
+    advisories.Push("Dosages per ACR Manual on Contrast Media; consult a healthcare professional "
+                  . "for patient-specific recommendations.")
+
+    ShowResult(MakeResult({
+        classification: "Premedication dosages",
+        impression:     RTrim(out, " `t`r`n"),
+        recommendation: "",
+        advisories:     advisories,
+        methodology:    "",
+        citations:      [{ text: "ACR Manual on Contrast Media. American College of Radiology.",
+                           url:  "https://www.acr.org/Clinical-Resources/Contrast-Manual" }]
+    }))
 }

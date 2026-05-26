@@ -156,6 +156,7 @@ ShowAddReferenceDialog() {
 
     ApplyModernChrome(g, dark)
     g.Show("x" pos.x " y" pos.y " w" w " h" h)
+    WinActivate("ahk_id " g.Hwnd)
 }
 
 BrowseReferenceFile(pathCtl, nameCtl) {
@@ -301,6 +302,7 @@ ShowReferencesManager() {
 
     ApplyModernChrome(g, dark)
     g.Show("x" pos.x " y" pos.y " w" w " h" h)
+    WinActivate("ahk_id " g.Hwnd)
 }
 
 RemoveSelectedReferences(lv, g) {

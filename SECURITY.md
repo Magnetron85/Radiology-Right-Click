@@ -13,6 +13,8 @@ This script is intended for use on a single clinical workstation by a single rad
 
 The only data it reads is text the user has actively highlighted in the foreground window. That text is copied to the clipboard (via Ctrl+C) and discarded after the calculation. The previous clipboard contents are saved and restored.
 
+> **Debug logging caveat:** diagnostic logging is **off by default**. If you turn it on (`"debug": {"capture": true}` in `preferences.json`), the first 60 characters of the selected text are written to `debug.log` next to the script. On a clinical workstation this can place PHI on disk. Leave debug logging off in clinical use, and do not commit or share `debug.log` (it is git-ignored). The "does not store PHI" guarantee above holds only with debug logging disabled.
+
 ## Disclaimer -- not for clinical use
 
 **This software is provided for entertainment, research, and educational purposes only.** It is **not a medical device**, has not been validated for clinical use, and **must not be relied upon for clinical decision-making**. The calculations are derived from published formulas (cited in-line in each calculator) but have not been independently validated. Every reported value must be independently verified by the user against the source data before it is incorporated into a clinical report or used to inform patient care. Use of this software does not establish a clinician-patient relationship and does not constitute medical advice. The author disclaims all liability for any clinical, diagnostic, therapeutic, or other decision made on the basis of this software's output.

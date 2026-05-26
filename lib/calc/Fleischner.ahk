@@ -13,9 +13,233 @@
 
 #Requires AutoHotkey v2.0
 #Include ..\Util.ahk
+#Include ..\FormGui.ahk
 
 Fleischner_Entry(input) {
-    return ProcessNodules(input)
+    ShowFleischnerDialog(input)
+    return ""
+}
+
+ShowFleischnerDialog(text := "") {
+    ; --- pre-fill from highlighted text ---
+    sz := TextScan.Size(text)
+    comp := TextScan.Composition(text)
+    multi := TextScan.ContainsAny(text
+        , ["\bmultiple\b","\bseveral\b","\bnumerous\b","\bscattered\b","\bfew\b","\bmany\b","\bnodules\b"])
+    solitary := TextScan.ContainsAny(text, ["\bsolitary\b","\bsingle\b","\ba\s+(?:single\s+)?pulmonary\s+nodule\b"])
+    multIdx := (multi && !solitary) ? 2 : 1
+
+    compIdx := (comp = "ground glass") ? 2
+            : (comp = "part solid")   ? 3
+            : 1   ; default solid (most common)
+
+    calcified := TextScan.ContainsAny(text, ["\bcalcified\b","\bcalcification","\bcalcific\b"])
+    noncalc   := TextScan.ContainsAny(text, ["\bnoncalcified\b","\bnon-calcified\b"])
+    if noncalc
+        calcified := false   ; explicit negation wins
+
+    spiculated := TextScan.ContainsAny(text, ["\bspiculat"])
+    lobulated  := TextScan.ContainsAny(text, ["\blobulat"])
+    morphIdx := spiculated ? 3 : (lobulated ? 2 : 1)
+
+    emphysema := TextScan.ContainsAny(text, ["\bemphysema\b","\bemphysematous\b"])
+    fibrosis  := TextScan.ContainsAny(text, ["\bfibrosis\b","\bfibrotic\b","\bUIP\b","\bIPF\b"])
+    highRisk  := emphysema || fibrosis || spiculated
+
+    location := ""
+    if RegExMatch(text, "i)(right|left)\s+(upper|middle|lower)\s+lobe", &m)
+        location := m[0]
+    else if RegExMatch(text, "i)(lingula|apical|basal)", &m)
+        location := m[0]
+
+    ; --- build the form ---
+    form := RadsForm("Fleischner 2017", 580)
+
+    form.Header("Number of nodules")
+    form.Dropdown("Mult", "Multiplicity:"
+        , ["Solitary (single nodule)"
+        ,  "Multiple nodules"], multIdx)
+
+    form.Header("Composition")
+    form.Dropdown("Comp", "Composition:"
+        , ["Solid"
+        ,  "Ground-glass"
+        ,  "Part-solid"], compIdx)
+
+    form.Header("Size of dominant nodule")
+    form.Numeric("SizeMm", "Largest dimension (mm):", sz.mm > 0 ? Round(sz.mm, 1) : "")
+
+    form.Header("Morphology and additional features")
+    form.Dropdown("Morph", "Margin / morphology:"
+        , ["Smooth or not specified"
+        ,  "Lobulated"
+        ,  "Spiculated (high-risk)"
+        ,  "Irregular"], morphIdx)
+    form.CheckboxRow2("Calcified",  "Calcified"
+                   , "Perifissural", "Perifissural", calcified, false)
+
+    form.Header("Patient risk")
+    form.Note("Per Fleischner 2017: heavy smoking (>=30 pack-years, or quit within past 15 years), family history of lung cancer, asbestos / radon / uranium exposure, or pulmonary fibrosis / emphysema on the study all contribute to high-risk classification.")
+    form.CheckboxRow2("HighRisk",  "High-risk patient (heavy smoker / family hx / occupational exposure)"
+                   , "Background", "Emphysema / pulmonary fibrosis on this study"
+                   , highRisk, emphysema || fibrosis)
+
+    form.Header("Location (optional)")
+    form.Numeric("Loc", "Anatomic location:", location)
+
+    form.SetSubmit(Fleischner_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+Fleischner_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    sizeMm := v.SizeMm + 0
+    if (sizeMm <= 0)
+        return MakeResult({ impression: "Please enter the nodule size in mm.",
+                            error: "Please enter the nodule size in mm." })
+
+    multStr := InStr(v.Mult, "Multiple") ? "Multiple" : "Solitary"
+    compStr := InStr(v.Comp, "Ground")    ? "ground glass"
+             : InStr(v.Comp, "Part-solid") ? "part-solid"
+             : "solid"
+    morphPart := InStr(v.Morph, "Spiculated") ? " spiculated"
+              : InStr(v.Morph, "Lobulated")  ? " lobulated"
+              : InStr(v.Morph, "Irregular")  ? " irregular"
+              : ""
+    calcPart := v.Calcified ? " calcified" : ""
+    locPart  := (v.Loc != "") ? " in the " v.Loc : ""
+
+    sentence := multStr " " sizeMm " mm" morphPart calcPart " " compStr
+              . " pulmonary nodule" (multStr = "Multiple" ? "s" : "") locPart "."
+    if (v.Background)
+        sentence .= " The lungs show emphysema."
+    fullText := ProcessNodules(sentence)
+
+    ; Strip the inline citation (now a structured field).
+    citPos := InStr(fullText, "`n`nCitation:")
+    if (citPos > 0)
+        fullText := SubStr(fullText, 1, citPos - 1)
+    fullText := RTrim(fullText, " `t`r`n")
+
+    ; Build a single-sentence impression. The ProcessNodules output has a
+    ; "FLEISCHNER SOCIETY RECOMMENDATION:" section that contains the
+    ; report-ready prose; everything above it is descriptive detail that
+    ; belongs in methodology. Parse the rec block, strip the header /
+    ; low-risk / high-risk labels, and collapse to a single paragraph.
+    impression := ""
+    recHdr := "FLEISCHNER SOCIETY RECOMMENDATION:`n"
+    recPos := InStr(fullText, recHdr)
+    notePos := InStr(fullText, "`n`nNote: Patient has")
+    advisories := []
+    if (recPos > 0) {
+        endPos := notePos > 0 ? notePos : StrLen(fullText) + 1
+        recBlock := SubStr(fullText, recPos + StrLen(recHdr)
+                         , endPos - recPos - StrLen(recHdr))
+        recBlock := Trim(recBlock, " `t`r`n")
+
+        ; Strip the "Follow-up dates: ..." narrative that _AddFollowUpDates
+        ; appended. The dates are useful for scheduling and stay in the
+        ; methodology block (which renders the full ProcessNodules text);
+        ; in the impression they're noise -- duplicated across both risk
+        ; branches and verbose ("November 2026 to May 2027 from May 2026").
+        recBlock := RegExReplace(recBlock, "\s*Follow-up dates:[^`r`n]*", "")
+
+        ; ProcessNodules emits BOTH "For low-risk patients:" and
+        ; "For high-risk patients:" branches for solid uncalcified nodules
+        ; because the radiologist often doesn't know the patient's clinical
+        ; risk profile (smoking history, occupational exposure, family hx).
+        ; Fleischner convention: emit BOTH recs when risk is unknown; the
+        ; ordering clinician then picks the relevant one.
+        ;
+        ; If the user has affirmatively indicated high risk via the form
+        ; (HighRisk checkbox -- patient-level indicators; or Background --
+        ; emphysema/fibrosis on this study), collapse to the high-risk
+        ; branch only. Otherwise keep both labeled.
+        affirmHigh := v.HighRisk || v.Background
+        lPos := InStr(recBlock, "For low-risk patients:")
+        hPos := InStr(recBlock, "For high-risk patients:")
+        hasBoth := (lPos > 0 && hPos > 0)
+
+        compStr := InStr(v.Comp, "Ground")    ? "ground-glass"
+                 : InStr(v.Comp, "Part-solid") ? "part-solid"
+                                               : "solid"
+        multStr := InStr(v.Mult, "Multiple") ? "multiple pulmonary nodules"
+                                             : "solitary pulmonary nodule"
+        ; Display size as integer when whole (avoids "6.0 mm" from
+        ; pre-filled Round(sz.mm, 1)).
+        sizeDisp := (sizeMm = Floor(sizeMm)) ? Integer(sizeMm) : Round(sizeMm, 1)
+        sizeStr := sizeDisp " mm " compStr " " multStr
+
+        ; Build the impression as "<nodule>. <follow-up-preamble>: <rec>."
+        ; The "per Fleischner 2017" label attaches to the recommendation,
+        ; not the nodule -- Fleischner is a follow-up framework, not a
+        ; classification system, so tagging the nodule with it reads off.
+        if (hasBoth && affirmHigh) {
+            recText := _FLE_CleanWhitespace(
+                Trim(SubStr(recBlock, hPos + StrLen("For high-risk patients:"))
+                   , " `t`r`n"))
+            impression := sizeStr ". Per Fleischner 2017 (high-risk patient): " recText
+        } else if (hasBoth) {
+            lowRec := _FLE_CleanWhitespace(
+                Trim(SubStr(recBlock, lPos + StrLen("For low-risk patients:")
+                          , hPos - lPos - StrLen("For low-risk patients:"))
+                   , " `t`r`n"))
+            highRec := _FLE_CleanWhitespace(
+                Trim(SubStr(recBlock, hPos + StrLen("For high-risk patients:"))
+                   , " `t`r`n"))
+            impression := sizeStr
+                       . ". Fleischner 2017 follow-up stratified by patient risk -- "
+                       . "low-risk: " RTrim(lowRec, ".")
+                       . "; high-risk: " RTrim(highRec, ".") "."
+        } else {
+            recText := _FLE_CleanWhitespace(recBlock)
+            if InStr(recText, "calcified nodules do not") {
+                ; Calcified path -- the rec is a self-contained sentence;
+                ; just append "per Fleischner 2017" before the period.
+                impression := sizeStr ". " RTrim(recText, ".") " per Fleischner 2017."
+            } else {
+                preamble := affirmHigh
+                    ? "Per Fleischner 2017 (high-risk patient): "
+                    : "Per Fleischner 2017: "
+                impression := sizeStr ". " preamble recText
+            }
+        }
+
+        ; Collapse any accidental double periods from rec strings already
+        ; ending in a period.
+        impression := StrReplace(impression, "..", ".")
+        impression := RTrim(impression, " `t`r`n")
+        if (notePos > 0) {
+            noteBlock := Trim(SubStr(fullText, notePos), " `t`r`n")
+            noteBlock := RegExReplace(noteBlock, "^Note:\s*", "")
+            advisories.Push(noteBlock)
+        }
+    } else {
+        impression := fullText
+    }
+
+    return MakeResult({
+        classification: "Fleischner 2017",
+        impression:     impression,
+        recommendation: "",
+        advisories:     advisories,
+        methodology:    fullText,
+        citations:      [{ text: "MacMahon H, Naidich DP, Goo JM, et al. "
+                                . "Guidelines for Management of Incidental Pulmonary Nodules "
+                                . "Detected on CT Images: From the Fleischner Society 2017. "
+                                . "Radiology. 2017;284(1):228-243.",
+                           url:  "https://pubs.rsna.org/doi/10.1148/radiol.2017161659" }],
+        echo:           g_LastSelectedText
+    })
+}
+
+; Collapse newlines + repeated whitespace inside a Fleischner rec block so
+; it reads as one sentence in the impression line.
+_FLE_CleanWhitespace(s) {
+    s := RegExReplace(s, "[`r`n]+", " ")
+    s := RegExReplace(s, "\s{2,}", " ")
+    return Trim(s)
 }
 
 ; ---- recommendations table -------------------------------------------------

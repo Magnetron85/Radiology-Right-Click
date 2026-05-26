@@ -7,9 +7,78 @@
 
 #Requires AutoHotkey v2.0
 #Include ..\Util.ahk
+#Include ..\FormGui.ahk
 
 LiverIron_Entry(input) {
-    return CalcLiverIron(input)
+    ShowLiverIronDialog(input)
+    return ""
+}
+
+ShowLiverIronDialog(text := "") {
+    fs := TextScan.FieldStrength(text)
+    r2 := TextScan.R2Star(text)
+    fsIdx := (fs = "2.89") ? 2 : (fs = "3.0") ? 3 : 1
+
+    form := RadsForm("MRI Liver Iron Content", 440)
+    form.Header("Acquisition")
+    form.Dropdown("Field", "Field strength:", ["1.5 T", "2.89 T (Siemens)", "3.0 T"], fsIdx)
+    form.Header("R2*")
+    form.Numeric("R2",   "R2* (Hz):", r2 != "" ? Round(r2, 1) : "")
+    form.SetSubmit(LiverIron_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+LiverIron_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    if (v.R2 = "")
+        return MakeResult({ impression: "Please enter the R2* value.",
+                            error: "Missing R2*" })
+
+    field := InStr(v.Field, "2.89") ? "2.89"
+           : InStr(v.Field, "3.0")  ? "3.0"
+                                    : "1.5"
+    r2 := v.R2 + 0.0
+
+    if (field = "1.5")
+        iron := 0.02603 * r2 - 0.16
+    else if (field = "2.89")
+        iron := 0.01400 * r2 - 0.03
+    else if (field = "3.0")
+        iron := 0.01349 * r2 - 0.03
+    else
+        iron := 0
+
+    interp := _InterpretIronOverload(iron)
+
+    impression := "Estimated hepatic iron content " Round(iron, 1) " mg Fe/g dry liver at "
+               . field "T (R2* " Round(r2, 1) " Hz). " interp
+
+    method := ""
+    if form
+        method .= "Selected inputs:`n" form.FormatInputs(v)
+    method .= "`nField strength: " field "T"
+    method .= "`nR2*: " Round(r2, 1) " Hz"
+    if (field = "1.5")
+        method .= "`nFormula: LIC = 0.02603 * R2* - 0.16"
+    else if (field = "2.89")
+        method .= "`nFormula: LIC = 0.01400 * R2* - 0.03"
+    else if (field = "3.0")
+        method .= "`nFormula: LIC = 0.01349 * R2* - 0.03"
+    method .= "`nEstimated LIC: " Round(iron, 1) " mg Fe/g dry liver"
+
+    return MakeResult({
+        classification: "LIC " Round(iron, 1) " mg Fe/g",
+        impression:     impression,
+        recommendation: "",
+        methodology:    method,
+        citations:      [{ text: "Guglielmo FF, Barr RG, Yokoo T, et al. "
+                                . "Liver Fibrosis, Fat, and Iron Evaluation with MRI and "
+                                . "Fibrosis and Fat Evaluation with US: A Practical Guide for "
+                                . "Radiologists. Radiographics. 2023 Jun;43(6):e220181.",
+                           url:  "https://pubs.rsna.org/doi/10.1148/rg.220181" }],
+        echo:           g_LastSelectedText
+    })
 }
 
 CalcLiverIron(input) {

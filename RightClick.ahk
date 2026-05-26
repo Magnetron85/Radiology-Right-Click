@@ -26,15 +26,19 @@ SetWorkingDir A_ScriptDir
 CoordMode "Mouse", "Screen"
 
 A_IconTip := "RightClick -- radiology helpers"
-TraySetIcon("imageres.dll", 109)
+if FileExist(A_ScriptDir "\RightClick.ico")
+    TraySetIcon(A_ScriptDir "\RightClick.ico")
 
 ; ---- foundation
 #Include lib\Prefs.ahk
+#Include lib\Debug.ahk
 #Include lib\Modern.ahk
 #Include lib\Util.ahk
+#Include lib\CalcResult.ahk
 #Include lib\UI.ahk
+#Include lib\FormGui.ahk
 
-; ---- calculators
+; ---- text-parse calculators (legacy v1)
 #Include lib\calc\Volumes.ahk
 #Include lib\calc\PSADensity.ahk
 #Include lib\calc\PregnancyDates.ahk
@@ -48,6 +52,20 @@ TraySetIcon("imageres.dll", 109)
 #Include lib\calc\NoduleSizes.ahk
 #Include lib\calc\ContrastPremed.ahk
 #Include lib\calc\Fleischner.ahk
+
+; ---- form-based RADS calculators (v2.1)
+#Include lib\calc\Bosniak.ahk
+#Include lib\calc\GBPolyp.ahk
+#Include lib\calc\IncidentalAdrenal.ahk
+#Include lib\calc\IncidentalThyroid.ahk
+#Include lib\calc\KyotoIPMN.ahk
+#Include lib\calc\LIRADS.ahk
+#Include lib\calc\LungRADS.ahk
+#Include lib\calc\ORADSMRI.ahk
+#Include lib\calc\ORADSUS.ahk
+#Include lib\calc\PIRADS.ahk
+#Include lib\calc\TIRADS.ahk
+#Include lib\calc\USLIRADS.ahk
 
 ; ---- shell
 #Include lib\References.ahk

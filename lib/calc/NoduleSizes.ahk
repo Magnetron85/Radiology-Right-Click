@@ -15,6 +15,65 @@
 ; ---------- Compare ---------------------------------------------------------
 
 CompareSizes_Entry(input) {
+    ShowCompareSizesDialog(input)
+    return ""
+}
+
+ShowCompareSizesDialog(text := "") {
+    form := RadsForm("Compare Measurement Sizes", 580)
+    form.Header("Sentence with current + previous measurements")
+    form.Note("Use keywords like 'now', 'previously', 'current', 'prior'. Dates in MM/DD/YYYY enable doubling-time + growth-rate computation.")
+    form.TextArea("Desc", "Description:", 120, text)
+    form.SetSubmit(CompareSizes_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+CompareSizes_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    if (Trim(v.Desc) = "")
+        return MakeResult({ impression: "Please paste a sentence with current and previous measurements.",
+                            error: "Missing description" })
+    body := CompareSizes_Compute(v.Desc)
+
+    ; Compose a single-sentence impression from the labeled body fields.
+    longestChange := ""
+    volChange := ""
+    doublingDays := ""
+    growthRate := ""
+    if RegExMatch(body, "i)Longest dimension change[:]?\s*([+\-]?[\d.]+%)", &m)
+        longestChange := m[1]
+    if RegExMatch(body, "i)Volume change[:]?\s*([+\-]?[\d.]+%)", &m)
+        volChange := m[1]
+    if RegExMatch(body, "i)Doubling time[:]?\s*([\d.]+\s*days)", &m)
+        doublingDays := m[1]
+    if RegExMatch(body, "i)Exponential Growth Rate[:]?\s*([+\-]?[\d.]+%)", &m)
+        growthRate := m[1]
+
+    if (longestChange != "") {
+        impression := "Interval change in longest dimension " longestChange
+        if (volChange != "")
+            impression .= ", volume change " volChange
+        if (doublingDays != "")
+            impression .= "; doubling time " doublingDays
+        if (growthRate != "")
+            impression .= ", growth rate " growthRate "/year"
+        impression .= "."
+    } else {
+        impression := body
+    }
+
+    return MakeResult({
+        classification: "Size comparison",
+        impression:     impression,
+        recommendation: "",
+        methodology:    body,
+        citations:      [],
+        echo:           g_LastSelectedText
+    })
+}
+
+CompareSizes_Compute(input) {
     if (input = "")
         return "No text selected. Highlight a sentence with two measurements first."
 

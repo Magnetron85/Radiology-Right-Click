@@ -26,7 +26,6 @@ A right-click context menu of measurement and analysis helpers for radiology dic
 - [Saved references](#saved-references)
 - [Configuring target apps](#configuring-target-apps)
 - [Activation modifier](#activation-modifier)
-- [Running the test suite](#running-the-test-suite)
 - [Project layout](#project-layout)
 - [License](#license)
 
@@ -437,12 +436,6 @@ Fn isn't offered. On most laptops it's intercepted by the keyboard firmware befo
 
 ---
 
-## Running the test suite
-
-Double-click `tests/test_calculators.ahk` to drive every calculator with a known-good sample input. A pass/fail report is written to `tests/test_output.txt` and opened in Notepad. All 20 cases should pass; if any fail, please open an issue with the report attached.
-
----
-
 ## Project layout
 
 ```
@@ -457,9 +450,6 @@ lib/
   References.ahk            URL / file reference manager
   Util.ahk                  Shared helpers (regex, dates, clipboard, safety)
   calc/                     One file per calculator (13 total)
-tests/
-  test_calculators.ahk      Drives every calculator with a sample input and
-                            writes a pass/fail report to test_output.txt
 ```
 
 ---

@@ -12,14 +12,33 @@ preferences*.tmp
 # v1 reference kept locally for porting; not part of the v2 release
 /_v1_reference/
 
+# Icon source / preview -- the generated RightClick.ico ships at the project
+# root and the script loads it; only the .py source and PNG previews stay
+# local. (RightClick.ico is intentionally NOT gitignored.)
+/_design/
+
 # Compiled binary -- ship via GitHub Releases, not the source tree
 RightClick.exe
 *.exe
 
-# Test artifacts and local diagnostics
-tests/test_output.txt
-tests/prefs_diagnostic.txt
-tests/test_prefs.ahk
+# Tests -- development only, not part of the release
+/tests/
+
+# Claude Code working dir -- never push any of it (personal, machine-specific)
+.claude/
+
+# Debug log -- may contain captured clipboard text (PHI) when debug capture is on
+debug.log
+*.log
+
+# Python cruft
+__pycache__/
+*.pyc
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Misc
 *.tmp

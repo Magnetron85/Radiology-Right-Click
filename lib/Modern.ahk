@@ -52,6 +52,41 @@ ApplyModernChrome(gui, dark := false) {
         return
     SetDarkTitleBar(gui.Hwnd, dark)
     SetRoundedCorners(gui.Hwnd, 2)
+    if dark
+        ApplyDarkChildTheme(gui)
+}
+
+; In dark mode, Common Controls (DropDownList, Edit, Button, ListView, etc)
+; ignore the parent's BackColor and render with the default light theme,
+; leaving bright rectangles inside an otherwise dark window. Calling
+; uxtheme!AllowDarkModeForWindow (ordinal 133) followed by SetWindowTheme
+; with a dark theme name forces each control into its dark variant. This is
+; the same trick the Windows shell uses to make File Explorer's controls
+; render dark when the system is in dark mode.
+ApplyDarkChildTheme(gui) {
+    static AllowDark := 0, initialized := false
+    if !initialized {
+        initialized := true
+        h := DllCall("GetModuleHandle", "str", "uxtheme.dll", "ptr")
+        if !h
+            h := DllCall("LoadLibrary", "str", "uxtheme.dll", "ptr")
+        if h
+            AllowDark := DllCall("GetProcAddress", "ptr", h, "ptr", 133, "ptr")
+    }
+    for hwnd, ctl in gui {
+        ; Skip Button-class controls (Checkbox, Radio, GroupBox, Button).
+        ; SetWindowTheme on those hands text rendering to the theme service,
+        ; which then ignores the `c<color>` option we set on each control.
+        ; Letting them render with default Win32 painting keeps c<color>
+        ; working so the captions read in our palette color.
+        t := ctl.Type
+        if (t = "Checkbox" || t = "Radio" || t = "GroupBox" || t = "Button")
+            continue
+        if AllowDark
+            try DllCall(AllowDark, "ptr", hwnd, "int", 1)
+        try DllCall("uxtheme\SetWindowTheme"
+            , "ptr", hwnd, "wstr", "DarkMode_Explorer", "ptr", 0)
+    }
 }
 
 ; Toggle Windows' dark-mode rendering for *this process's* native popup

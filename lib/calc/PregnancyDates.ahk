@@ -4,13 +4,140 @@
 
 #Requires AutoHotkey v2.0
 #Include ..\Util.ahk
+#Include ..\FormGui.ahk
 
 PregnancyDates_Entry(input) {
-    return CalcPregnancyDates(input)
+    ShowPregnancyDialog(input)
+    return ""
 }
 
 MenstrualPhase_Entry(input) {
-    return CalcMenstrualPhase(input)
+    ShowMenstrualDialog(input)
+    return ""
+}
+
+ShowPregnancyDialog(text := "") {
+    lmpYmd := ""
+    if (lmpStr := TextScan.LMP(text)) {
+        lmpYmd := ParseDate(lmpStr)
+    }
+    weeks := 0, days := 0
+    if RegExMatch(text, "i)(\d+)\s*(?:weeks?|w)\s*(?:and|&|,|-)?\s*(\d+)?\s*(?:days?|d)?", &m) {
+        weeks := SafeInt(m[1], 0)
+        days  := (m.Count >= 2) ? SafeInt(m[2], 0) : 0
+    }
+
+    form := RadsForm("Pregnancy Dates", 480)
+    form.Header("Input mode (use one)")
+    form.Dropdown("Mode", "Mode:"
+        , ["From LMP date"
+        ,  "From GA (weeks + days)"], lmpYmd != "" ? 1 : (weeks > 0 ? 2 : 1))
+
+    form.Header("LMP date")
+    form.DateField("LMP", "Last menstrual period:", lmpYmd)
+
+    form.Header("Gestational age (if no LMP)")
+    form.Numeric("Weeks", "Weeks:", weeks)
+    form.Numeric("Days",  "Days:",  days)
+    form.SetSubmit(Pregnancy_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+Pregnancy_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    if InStr(v.Mode, "LMP") {
+        lmpDate := FormatTime(v.LMP, "MM/dd/yyyy")
+        body := CalcPregnancyDates("LMP: " lmpDate)
+    } else {
+        weeks := SafeInt(v.Weeks, 0)
+        days  := SafeInt(v.Days, 0)
+        if (weeks = 0 && days = 0)
+            return MakeResult({ impression: "Please enter gestational age in weeks and/or days.",
+                                error: "Missing GA" })
+        body := CalcPregnancyDates("GA: " weeks " weeks and " days " days as of today")
+    }
+
+    method := ""
+    if form
+        method .= "Selected inputs:`n" form.FormatInputs(v)
+    method .= "`n" body
+
+    ; Compose a single-line impression from the labeled body
+    lmp := "", edd := "", ga := ""
+    if RegExMatch(body, "i)LMP[:]?\s*(\S+)", &m)
+        lmp := m[1]
+    if RegExMatch(body, "i)Estimated Delivery Date[:]?\s*(\S+)", &m)
+        edd := m[1]
+    if RegExMatch(body, "i)Current Gestational Age[:]?\s*([^\r\n]+)", &m)
+        ga := Trim(m[1])
+
+    impression := body
+    if (lmp != "" && edd != "" && ga != "")
+        impression := "LMP " lmp ", EDD " edd ", current GA " ga "."
+
+    return MakeResult({
+        classification: "Pregnancy dates",
+        impression:     impression,
+        recommendation: "",
+        methodology:    method,
+        citations:      [{ text: "Naegele's rule for estimated delivery date "
+                                . "(LMP + 280 days). Standard obstetric formula.",
+                           url:  "" }],
+        echo:           g_LastSelectedText
+    })
+}
+
+ShowMenstrualDialog(text := "") {
+    lmpYmd := ""
+    if (lmpStr := TextScan.LMP(text))
+        lmpYmd := ParseDate(lmpStr)
+
+    form := RadsForm("Menstrual Phase", 420)
+    form.Header("Last menstrual period")
+    form.DateField("LMP", "LMP date:", lmpYmd)
+    form.SetSubmit(Menstrual_OnSubmit)
+    form.AddButtons()
+    form.Show()
+}
+
+Menstrual_OnSubmit(v, form := "") {
+    global g_LastSelectedText
+    lmpDate := FormatTime(v.LMP, "MM/dd/yyyy")
+    body := CalcMenstrualPhase("LMP: " lmpDate)
+
+    method := ""
+    if form
+        method .= "Selected inputs:`n" form.FormatInputs(v)
+    method .= "`n" body
+
+    ; Compose a single-line impression by collapsing the labeled body.
+    lmp := "", day := "", phase := "", thick := ""
+    if RegExMatch(body, "i)LMP[:]?\s*(\S+)", &m)
+        lmp := m[1]
+    if RegExMatch(body, "i)Current Cycle Day[:]?\s*(\d+/\d+)", &m)
+        day := m[1]
+    if RegExMatch(body, "i)`n([A-Z][^`r`n]*Phase|Ovulation)`n", &m)
+        phase := m[1]
+    if RegExMatch(body, "i)Expected endometrial[^:]*:\s*([^\r\n]+)", &m)
+        thick := Trim(m[1])
+
+    impression := body
+    if (lmp != "" && day != "" && phase != "") {
+        impression := "LMP " lmp ", cycle day " day " (" phase ")"
+        if (thick != "")
+            impression .= "; expected endometrium " thick
+        impression .= "."
+    }
+
+    return MakeResult({
+        classification: "Menstrual phase",
+        impression:     impression,
+        recommendation: "",
+        methodology:    method,
+        citations:      [],
+        echo:           g_LastSelectedText
+    })
 }
 
 CalcPregnancyDates(input) {
