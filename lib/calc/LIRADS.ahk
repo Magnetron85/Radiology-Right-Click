@@ -42,17 +42,37 @@ ShowLIRADSDialog(text := "") {
 
     form := RadsForm("LI-RADS v2018 (CT / MRI)", 620)
 
+    ; Progressive-disclosure layout. IsNC and Tiv are the two absolute
+    ; overrides in _LR_Classify: IsNC returns LR-NC before anything else
+    ; is read, and Tiv returns LR-TIV before the table / LR-M / benign /
+    ; ancillary logic (the LR-1 branches require !tiv). So:
+    ;   * IsNC checked -> hide Tiv and every downstream section
+    ;   * Tiv checked  -> hide the standard-pathway major features,
+    ;     LR-M section, benign overrides, and ancillary counts
+    ; Everything else stays visible: washout / capsule / growth still
+    ; feed the table category that LR-M compares against, and the
+    ; targetoid component checkboxes still matter whenever LM_Target
+    ; itself is unchecked.
     form.Header("Image quality")
     form.Checkbox("IsNC", "Image degradation / omission prevents categorization (LR-NC)", false)
 
     form.Header("Major features")
+    form.Checkbox("Tiv",    "Tumor in vein (TIV) -- overrides table -> LR-TIV", tiv)
     form.Checkbox("Aphe",   "Non-rim arterial phase hyperenhancement (APHE)", aphe)
     form.Numeric("SizeMm",  "Observation size (mm):", sz.mm > 0 ? Round(sz.mm) : 0)
     form.CheckboxRow2("Washout", "Non-peripheral washout"
                    , "Capsule", "Enhancing capsule", washout, capsule)
     form.Checkbox("Growth", "Threshold growth (>=50% size increase in <=6 months)", growth)
-    form.Checkbox("Tiv",    "Tumor in vein (TIV) -- overrides table -> LR-TIV", tiv)
     form.Checkbox("BloodPool", "Hemangioma-type enhancement parallels blood pool", bp)
+    ; Expanders: the LR-M block and the ancillary adjustment are the two
+    ; "advanced" branches that made the dialog taller than small screens.
+    ; Each is collapsed until asserted. The LR-M expander defaults CHECKED
+    ; whenever the text scan pre-detected any LR-M feature, so prefills are
+    ; never hidden (a hidden control resets to default and would silently
+    ; drop the detected feature on submit).
+    anyLrmPre := targetoid || infiltr || rimAphe || perWash || delCent || markDWI || necrosis
+    form.Checkbox("LrmShow", "Targetoid / LR-M morphology may be present (show LR-M criteria)", anyLrmPre)
+    form.Checkbox("AncShow", "Apply ancillary features (optional LR-3 / LR-4 adjustment)", false)
 
     form.Header("LR-M criteria (any independent feature -> LR-M)")
     form.CheckboxRow2("LM_Target",    "Targetoid mass (concentric pattern of rim APHE + peripheral washout / delayed central)"
@@ -74,21 +94,39 @@ ShowLIRADSDialog(text := "") {
     form.Numeric("AncBenign", "Number of ancillary features favoring benignity:", 0)
     form.Numeric("AncHCC",   "Number of HCC-specific ancillary features:", 0)
 
-    ; IsNC = image degradation / omission prevents categorization; when ticked
-    ; the algorithm returns LR-NC immediately, so the rest of the form is
-    ; irrelevant. DefBenign + DistinctBenign similarly short-circuit but those
-    ; still want the user to confirm size, so they're not exclusion-tied.
-    form.DisableWhenAnyChecked(
-        ["IsNC"]
-      , ["Aphe", "SizeMm", "Washout", "Capsule", "Growth", "Tiv", "BloodPool"
-       , "LM_Target", "LM_Infiltr", "LM_RimAphe", "LM_PerWashout"
-       , "LM_DelCenter", "LM_MarkedDWI", "LM_Necrosis"
-       , "DefBenign", "DistinctBenign"
-       , "AncMalig", "AncBenign", "AncHCC"])
+    form.OnChange("IsNC",    _LR_UpdateForm)
+    form.OnChange("Tiv",     _LR_UpdateForm)
+    form.OnChange("LrmShow", _LR_UpdateForm)
+    form.OnChange("AncShow", _LR_UpdateForm)
+    _LR_UpdateForm(form)
 
     form.SetSubmit(LIRADS_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
+}
+
+_LR_UpdateForm(frm) {
+    ; IsNC -> LR-NC immediately; nothing else is read.
+    isNc := (frm.GetValue("IsNC") = 1)
+    frm.SetVisible("Tiv", !isNc)
+
+    ; Tiv -> LR-TIV before the table / LR-M / benign / ancillary logic
+    ; runs (and the LR-1 / LR-2 branches require !tiv), so the rest of
+    ; the form is irrelevant while it is checked. Read Tiv AFTER the
+    ; visibility pass above -- a just-hidden control has already been
+    ; reset to its unchecked default.
+    showStd := !isNc && (frm.GetValue("Tiv") != 1)
+    for name in ["Aphe", "SizeMm", "Washout", "Capsule", "Growth", "BloodPool"
+               , "LrmShow", "AncShow"]
+        frm.SetVisible(name, showStd)
+    ; Read the expanders AFTER the pass above -- if they were just hidden
+    ; they have already been reset to their defaults.
+    showLrm := showStd && (frm.GetValue("LrmShow") = 1)
+    showAnc := showStd && (frm.GetValue("AncShow") = 1)
+    frm.SetSectionVisible("LR-M criteria (any independent feature -> LR-M)", showLrm)
+    frm.SetSectionVisible("Definitely / probably benign overrides", showStd)
+    frm.SetSectionVisible("Ancillary feature counts", showAnc)
 }
 
 LIRADS_OnSubmit(v, form := "") {

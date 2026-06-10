@@ -27,17 +27,24 @@ ShowCalciumScoreDialog(text := "") {
             : (race = "Chinese") ? 5
             : 1
 
+    ; Mandatory inputs first (Age / Sex / Score); Race is optional and
+    ; lives last under its own clearly-labeled section -- it stays visible
+    ; (no disclosure gate) because choosing it merely ADDS the MESA
+    ; race-stratified percentile on top of the always-computed Hoff one.
     form := RadsForm("Calcium Score Percentile", 480)
     form.Header("Patient")
     form.Numeric("Age",   "Age (years):", age > 0 ? age : "")
     form.Dropdown("Sex",  "Sex:", ["Male", "Female"], sexIdx)
-    form.Dropdown("Race", "Race (optional, enables MESA):"
-        , ["Not specified","White","Black","Hispanic","Chinese"], raceIdx)
     form.Header("Coronary artery calcium")
     form.Numeric("Score", "Agatston score:", score != "" ? Round(score, 1) : "")
+    form.Header("Optional")
+    form.Note("Race adds the race-stratified MESA percentile (valid for ages 45-84).")
+    form.Dropdown("Race", "Race (optional, enables MESA):"
+        , ["Not specified","White","Black","Hispanic","Chinese"], raceIdx)
     form.SetSubmit(CalciumScore_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 CalciumScore_OnSubmit(v, form := "") {
@@ -139,13 +146,25 @@ CalciumScore_OnSubmit(v, form := "") {
                               . "Circulation. 2006;113(1):30-37.",
                          url:  "https://doi.org/10.1161/CIRCULATIONAHA.105.580696" })
 
+    ; Short inline fragment for parenthetical paste. Prefer the MESA
+    ; percentile when available (same precedence as the impression);
+    ; _CS_HoffLabel already includes the word "percentile".
+    pasteFrag := (scoreDisp != "")
+        ? "Agatston score " scoreDisp ", "
+          . (mesaLabel != ""
+              ? mesaLabel " percentile (MESA)"
+              : _CS_HoffLabel(pct) " (Hoff)")
+        : ""
+
     return MakeResult({
-        classification: "Calcium score " score,
+        classification: "Calcium score " scoreDisp,
         impression:     impression,
         recommendation: "",
         methodology:    method,
         citations:      citations,
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          pasteFrag,
+        pasteMode:      ""
     })
 }
 
@@ -170,7 +189,9 @@ _CS_HoffLabel(pct) {
 }
 
 CalcCalciumScorePercentile(input) {
-    if !RegExMatch(input, "i)Age:\s*(\d+)", &ageM)
+    ; \b so "Coverage: 55" (which contains the substring "age:") can't
+    ; parse as the patient age.
+    if !RegExMatch(input, "i)\bAge:\s*(\d+)", &ageM)
         return input "`n`nError: Age not found or invalid. Please provide age in the format 'Age: 55'."
     if !RegExMatch(input, "i)Sex:\s*(Male|Female)", &sexM)
         return input "`n`nError: Sex not found or invalid. Please specify either Male or Female."
@@ -186,7 +207,6 @@ CalcCalciumScorePercentile(input) {
         return input "`n`nError: Calcium score not found or invalid."
 
     if (age < 30)
-
         return input "`n`nCONTEXT:`nError: The calcium score calculators are only valid for ages 30 and above."
 
     ; Optional race (White / Black / Hispanic / Chinese). If race AND age 45-84,
@@ -291,18 +311,25 @@ _DeterminePlaqueBurden(score) {
     return "Extensive atherosclerotic plaque. High likelihood of at least one significant coronary narrowing."
 }
 
+; Maps the _HoffPercentile sentinel values (0 = no calcium, 10 = sub-25th,
+; 25/50/75 = at-or-above that cutoff but below the next, 90 = at 90th,
+; 99 = above 90th) to band labels. Bands must agree with _CS_HoffLabel --
+; the old <= chains here were shifted one band low (sentinel 25, meaning
+; "25th-50th", was labeled "Low (<=25%)").
 _DetermineComparison(pct) {
     if (pct = 0)
         return "No calcium (0 score)"
-    if (pct <= 25)
-        return "Low (<=25%)"
-    if (pct <= 50)
-        return "Average (25-50%)"
-    if (pct <= 75)
-        return "Average (50-75%)"
-    if (pct <= 90)
-        return "High (75-90%)"
-    return "Very high (>90%)"
+    if (pct < 25)
+        return "Low (below 25th percentile)"
+    if (pct = 25)
+        return "Average (25th-50th percentile)"
+    if (pct = 50)
+        return "Average (50th-75th percentile)"
+    if (pct = 75)
+        return "High (75th-90th percentile)"
+    if (pct = 90)
+        return "High (at 90th percentile)"
+    return "Very high (>90th percentile)"
 }
 
 _CoronaryAge(score) {

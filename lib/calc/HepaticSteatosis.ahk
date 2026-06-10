@@ -35,6 +35,7 @@ ShowHepaticSteatosisDialog(text := "") {
     form.SetSubmit(HepaticSteatosis_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 HepaticSteatosis_OnSubmit(v, form := "") {
@@ -98,7 +99,9 @@ HepaticSteatosis_OnSubmit(v, form := "") {
                          { text: "Sirlin CB. Invited Commentary on Image-based quantification of "
                                 . "hepatic fat. Radiographics. 2009;29:1277-1280.",
                            url:  "https://doi.org/10.1148/027153330290051277" }],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          fatFraction != "" ? "fat fraction " Round(fatFraction, 1) "%" : "",
+        pasteMode:      ""
     })
 }
 
@@ -128,7 +131,12 @@ CalcHepaticSteatosis(input) {
         spleenIP := sm[2] + 0, spleenOP := sm[4] + 0
         if (spleenIP != 0 && spleenOP != 0) {
             fatPct := 100 * ((liverIP/spleenIP) - (liverOP/spleenOP)) / (2 * (liverIP/spleenIP))
-            out := StrReplace(out, ")", ", Spleen-normalized FF: " Round(fatPct, 1) "%)",, , 1)
+            ; Anchor the replacement to the exact annotation we appended --
+            ; replacing the first bare ")" would inject into any parenthesis
+            ; the user's own selection happens to contain.
+            ffTag := "Fat Fraction: " Round(fatFraction, 1) "%)"
+            out := StrReplace(out, ffTag
+                 , "Fat Fraction: " Round(fatFraction, 1) "%, Spleen-normalized FF: " Round(fatPct, 1) "%)",, , 1)
             out .= "Spleen-normalized FF " _InterpretSteatosis(fatPct)
             out .= "`nNote: spleen-normalized fat fraction is an older approximation (Sirlin 2009) not endorsed by Guglielmo 2023; use as a sanity check, not as the primary metric.`n"
         }

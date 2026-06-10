@@ -24,6 +24,7 @@ ShowStatisticsDialog(text := "") {
     form.SetSubmit(Statistics_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 Statistics_OnSubmit(v, form := "") {
@@ -52,7 +53,10 @@ Statistics_OnSubmit(v, form := "") {
         recommendation: "",
         methodology:    CalcStatistics(v.Nums),
         citations:      [],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          "n " nums.Length ", mean " Round(Mean(nums), 1)
+                        . ", range " Round(Min(nums*), 1) "-" Round(Max(nums*), 1),
+        pasteMode:      ""
     })
 }
 
@@ -63,6 +67,7 @@ ShowRangeDialog(text := "") {
     form.SetSubmit(Range_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 Range_OnSubmit(v, form := "") {
@@ -77,7 +82,9 @@ Range_OnSubmit(v, form := "") {
         recommendation: "",
         methodology:    "",
         citations:      [],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          InStr(body, "No numbers found") ? "" : "range " StrReplace(body, " - ", "-"),
+        pasteMode:      ""
     })
 }
 
@@ -111,7 +118,10 @@ CalcStatistics(input) {
 CalcRange(input) {
     nums := []
     unit := ""
-    needle := "(-?\d+(?:\.\d+)?)(?:\s*((?:cm/s|mm/s|m/s|km/h|mph|cm|mm|Hz|T|mg|m|ml|mL|cc|s|min|hr|days?|weeks?|months?|years?|g|ng|ng/ml|ng/mL|mmol/L|µmol/L|°F|°C)(?:/(?:day|week|month|year))?))?"
+    ; Alternation is ordered longest-first and followed by a letter
+    ; lookahead -- with bare "m" / "s" listed before "ml" / "min" the
+    ; regex matched the one-letter prefix ("5 ml" reported unit "m").
+    needle := "(-?\d+(?:\.\d+)?)(?:\s*((?:cm/s|mm/s|m/s|km/h|mph|ng/ml|ng/mL|mmol/L|µmol/L|°F|°C|min|hr|days?|weeks?|months?|years?|cm|mm|Hz|mg|ng|ml|mL|cc|g|T|m|s)(?:/(?:day|week|month|year))?)(?![A-Za-z]))?"
     pos := 1
     while (pos := RegExMatch(input, needle, &m, pos)) {
         nums.Push(m[1] + 0)

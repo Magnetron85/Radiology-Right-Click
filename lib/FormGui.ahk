@@ -69,6 +69,17 @@ class RadsForm {
         this.inputs   := []
         this.byName   := Map()
         this.stash    := Map()
+        ; --- reflow state (progressive disclosure) ---
+        ; rowList: every _Advance call records one layout row
+        ;   { pre, h, gap, hidden, section, ctls: [{ctl, dy, rec}] }
+        ; recOfCtl: hwnd -> byName record, for both the input control and
+        ; its label, so a row knows which logical input each control
+        ; belongs to. topY/_flowBottom anchor the relative row geometry.
+        this.rowList   := []
+        this.recOfCtl  := Map()
+        this.topY      := 14
+        this._flowBottom := 14
+        this.shown     := false
 
         this.g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox +DPIScale", title)
         this.g.MarginX := 16
@@ -88,8 +99,14 @@ class RadsForm {
             type:    type,
             section: this.currentSection
         })
-        if (ctl != "")
-            this.byName[vname] := { ctl: ctl, label: labelCtl, default: default, type: type }
+        if (ctl != "") {
+            rec := { ctl: ctl, label: labelCtl, default: default, type: type
+                   , visible: true }
+            this.byName[vname] := rec
+            this.recOfCtl[ctl.Hwnd] := rec
+            if (labelCtl != "")
+                this.recOfCtl[labelCtl.Hwnd] := rec
+        }
     }
 
     ; ---- dependency wiring primitives ---------------------------------------
@@ -138,26 +155,66 @@ class RadsForm {
         }
     }
 
+    ; Progressive disclosure: hiding an input collapses its space (the rows
+    ; below slide up and the window shrinks); showing it restores both the
+    ; space and the user's prior value. A hidden input is reset to its
+    ; default so Gui.Submit never returns a stale value for a question the
+    ; user can no longer see.
     SetVisible(name, visible) {
+        if this._SetVisibleNoReflow(name, visible)
+            this._Reflow()
+    }
+
+    ; Returns true if the visibility actually changed (caller decides
+    ; whether to reflow -- lets section toggles batch many changes into a
+    ; single relayout).
+    _SetVisibleNoReflow(name, visible) {
         if !this.byName.Has(name)
-            return
+            return false
         rec := this.byName[name]
+        if (rec.visible = !!visible)
+            return false
+        rec.visible := !!visible
         if !visible {
             if !this.stash.Has(name)
                 this.stash[name] := rec.ctl.Value
-            rec.ctl.Visible := false
-            if (rec.label != "")
-                rec.label.Visible := false
             this._ResetCtl(rec)
         } else {
-            rec.ctl.Visible := true
-            if (rec.label != "")
-                rec.label.Visible := true
             if this.stash.Has(name) {
                 try rec.ctl.Value := this.stash[name]
                 this.stash.Delete(name)
             }
         }
+        return true
+    }
+
+    ; Hide / show an entire Header() section: the header row, every note,
+    ; and every input declared under it. Batches into one reflow.
+    SetSectionVisible(label, visible) {
+        sec := _CleanLabel(label)
+        changed := false
+        for row in this.rowList {
+            if (row.section != sec)
+                continue
+            if (row.hidden != !visible) {
+                row.hidden := !visible
+                changed := true
+            }
+            for m in row.ctls {
+                if (m.rec != "" && this._SetVisibleNoReflow(this._NameOfRec(m.rec), visible))
+                    changed := true
+            }
+        }
+        if changed
+            this._Reflow()
+    }
+
+    _NameOfRec(rec) {
+        for name, r in this.byName {
+            if (r = rec)
+                return name
+        }
+        return ""
     }
 
     ; Apply a muted foreground color for visual disabled feedback. Only used
@@ -204,9 +261,10 @@ class RadsForm {
                 rec.ctl.Value := 0
             else if (rec.type = "dropdown")
                 rec.ctl.Value := 1
-            else if (rec.type = "numeric")
-                rec.ctl.Value := 0
-            else if (rec.type = "textarea")
+            else if (rec.type = "numeric" || rec.type = "textarea")
+                ; Blank default resets to BLANK, not 0 -- classifiers treat
+                ; "" as "not measured / not entered"; a synthetic 0 reads as
+                ; a real measured zero (e.g. 0 HU) and changes results.
                 rec.ctl.Value := ""
         }
     }
@@ -276,29 +334,155 @@ class RadsForm {
     }
 
     ; ---- internal: advance y to one row-gap below the actual rendered
-    ;      bottom of the controls just added.
+    ;      bottom of the controls just added, and record the row geometry
+    ;      (positions relative to the row top) so _Reflow can re-stack
+    ;      rows when visibility changes.
     _Advance(ctls, extraGap := -1) {
         gap := extraGap >= 0 ? extraGap : this.rowGap
+        rowTop := 0x7FFFFFFF
         maxBottom := this.y
         for c in ctls {
-            c.GetPos(, &cy, , &ch)
+            c.GetPos(, &cy)
+            ch := this._CtlH(c)
+            if (cy < rowTop)
+                rowTop := cy
             if (cy + ch > maxBottom)
                 maxBottom := cy + ch
             this.controls.Push(c)
         }
+        if (rowTop = 0x7FFFFFFF)
+            rowTop := this.y
+        row := { pre: rowTop - this._flowBottom
+               , h: maxBottom - rowTop
+               , gap: gap
+               , hidden: false
+               , section: this.currentSection
+               , ctls: [] }
+        for c in ctls {
+            c.GetPos(, &cy)
+            row.ctls.Push({ ctl: c, dy: cy - rowTop
+                          , rec: this.recOfCtl.Has(c.Hwnd) ? this.recOfCtl[c.Hwnd] : "" })
+        }
+        this.rowList.Push(row)
+        this._flowBottom := maxBottom
         this.y := maxBottom + gap
     }
 
+    ; Effective layout height of a control, in the gui's (DPI-scaled)
+    ; logical units. Combo-class controls report the OPEN drop-list height
+    ; from GetPos -- roughly 60+ px -- which historically left a band of
+    ; dead space under every dropdown. Measure their CLOSED selection-field
+    ; height instead.
+    _CtlH(c) {
+        if (c.Type = "DDL" || c.Type = "ComboBox") {
+            ; CB_GETITEMHEIGHT with wParam -1 = selection field height
+            ; (physical px; convert to the gui's logical units).
+            ih := DllCall("SendMessage", "ptr", c.Hwnd, "uint", 0x0154
+                        , "ptr", -1, "ptr", 0, "ptr")
+            if (ih > 0 && ih < 200)
+                return Round((ih + 8) * 96 / A_ScreenDPI)
+            return 26
+        }
+        c.GetPos(, , , &ch)
+        return ch
+    }
+
+    ; Re-stack every row from the top: hidden inputs collapse, visible ones
+    ; keep their recorded intra-row offsets, and the window resizes to fit.
+    ; Wrapped in WM_SETREDRAW so multi-row changes repaint once.
+    _Reflow() {
+        this._Redraw(false)
+        prevBottom := this.topY
+        yEnd := this.topY
+        for row in this.rowList {
+            vis := !row.hidden && this._RowVisible(row)
+            if !vis {
+                for m in row.ctls
+                    m.ctl.Visible := false
+                continue
+            }
+            rowTop := prevBottom + row.pre
+            for m in row.ctls {
+                show := (m.rec = "") ? true : m.rec.visible
+                m.ctl.Visible := show
+                if show
+                    m.ctl.Move(, rowTop + m.dy)
+            }
+            prevBottom := rowTop + row.h
+            yEnd := prevBottom + row.gap
+        }
+        this.y := yEnd
+        ; Keep the build cursor consistent so rows added after a reflow
+        ; (e.g. AddButtons following an initial visibility pass) anchor to
+        ; the last VISIBLE row, not the stale pre-reflow bottom.
+        this._flowBottom := prevBottom
+        this._Redraw(true)
+        if this.shown
+            this._ResizeShown()
+    }
+
+    ; A row with no logical inputs (header / note / rule) is visible unless
+    ; its section was hidden; an input row is visible while at least one of
+    ; its inputs is.
+    _RowVisible(row) {
+        hasRec := false
+        for m in row.ctls {
+            if (m.rec != "") {
+                hasRec := true
+                if m.rec.visible
+                    return true
+            }
+        }
+        return !hasRec
+    }
+
+    ; Work-area cap must convert physical monitor pixels to this gui's
+    ; DPI-scaled logical units (+DPIScale): comparing logical h against
+    ; physical work.height never triggers on high-DPI displays, letting
+    ; tall forms run off the bottom of the screen.
+    _CapToWork(v, workPx) {
+        return Min(v, Round((workPx - 24) * 96 / A_ScreenDPI))
+    }
+
+    _ResizeShown() {
+        MouseGetPos(&mx, &my)
+        work := GetWorkAreaAt(mx, my)
+        h := this._CapToWork(this.y + 14, work.height)
+        w := this._CapToWork(this.width, work.width)
+        this.g.Show("w" w " h" h " NoActivate")
+    }
+
+    _Redraw(enable) {
+        if !this.shown
+            return
+        ; Direct DllCall, not AHK's SendMessage: WM_SETREDRAW(false)
+        ; clears WS_VISIBLE, so an "ahk_id" window search can no longer
+        ; find the window to send the re-enable.
+        DllCall("SendMessage", "ptr", this.g.Hwnd, "uint", 0x000B  ; WM_SETREDRAW
+              , "ptr", enable ? 1 : 0, "ptr", 0)
+        if enable {
+            ; RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN
+            DllCall("RedrawWindow", "ptr", this.g.Hwnd, "ptr", 0, "ptr", 0, "uint", 0x0185)
+        }
+    }
+
+    ; Section header: accent-colored bold caption over a hairline rule --
+    ; the modern "settings page" look. The rule is a 1px Text with the
+    ; palette border color (system-themed etched lines ignore dark mode).
     Header(label) {
         if (this.y > 14)
             this.y += this.sectionGap
-        this.g.SetFont("s10 Bold c" this.palette["fg"])
+        this.currentSection := _CleanLabel(label)
+        this.g.SetFont("s10 Bold c" this.palette["accent"])
         t := this.g.Add("Text"
-            , "x" this.leftX " y" this.y " w" (this.width - 32) " +Wrap"
+            , "x" this.leftX " y" this.y " w" (this.width - 36) " +Wrap"
             , label)
         this.g.SetFont("s10 Norm c" this.palette["fg"])
-        this.currentSection := _CleanLabel(label)
-        this._Advance([t], 4)
+        t.GetPos(, &ty, , &th)
+        rule := this.g.Add("Text"
+            , "x" this.leftX " y" (ty + th + 4) " w" (this.width - 36)
+              . " h1 +Background" this.palette["border"])
+        this._Advance([t, rule], 6)
     }
 
     Note(text) {
@@ -542,18 +726,18 @@ class RadsForm {
 
         ; Height comes from this.y, which the _Advance() helpers updated
         ; based on each control's measured rendered bottom. Cap at work area
-        ; minus a small margin so the window always fits.
-        h := this.y + 14
-        w := this.width
-        if (w > work.width  - 24)
-            w := work.width  - 24
-        if (h > work.height - 24)
-            h := work.height - 24
+        ; minus a small margin (in logical units) so the window always fits.
+        h := this._CapToWork(this.y + 14, work.height)
+        w := this._CapToWork(this.width, work.width)
 
-        pos := ClampToWorkArea(mx + 12, my + 12, w, h, work)
+        ; ClampToWorkArea works in physical screen pixels (cursor coords,
+        ; monitor work area); w/h above are DPI-scaled logical units.
+        scale := A_ScreenDPI / 96
+        pos := ClampToWorkArea(mx + 12, my + 12, Round(w * scale), Round(h * scale), work)
 
         ApplyModernChrome(this.g, this.dark)
         this.g.Show("x" pos.x " y" pos.y " w" w " h" h)
+        this.shown := true
         WinActivate("ahk_id " this.g.Hwnd)
     }
 }

@@ -150,10 +150,14 @@ ShowContextMenu() {
 
 BuildContextMenu() {
     m := Menu()
-    m.Add("Cut",    (*) => Send("^x"))
-    m.Add("Copy",   (*) => Send("^c"))
-    m.Add("Paste",  (*) => Send("^v"))
-    m.Add("Delete", (*) => Send("{Delete}"))
+    ; SendEvent, NOT Send: v2's default SendInput bypasses the message
+    ; queue, so apps with low-level keyboard hooks (PowerScribe / Dragon)
+    ; never see the keystroke -- these items silently did nothing there
+    ; while working fine in Notepad. Same reasoning as GetSelectedText.
+    m.Add("Cut",    (*) => SendEvent("^x"))
+    m.Add("Copy",   (*) => SendEvent("^c"))
+    m.Add("Paste",  (*) => SendEvent("^v"))
+    m.Add("Delete", (*) => SendEvent("{Delete}"))
     m.Add()
 
     items := CalculatorRegistry()

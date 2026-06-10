@@ -57,6 +57,16 @@ ShowKyotoIPMNDialog(text := "") {
 
     form := RadsForm("Kyoto IPMN Guidelines (2024)", 580)
 
+    ; Progressive-disclosure layout.
+    ;   * Duct type gates the CYST-specific inputs. A pure main-duct (MD)
+    ;     IPMN is segmental/diffuse MPD dilation with NO side-branch cyst
+    ;     by definition -- so "largest cyst diameter", "thickened/enhancing
+    ;     cyst walls", and "cyst growth rate" do not apply (if a cyst is
+    ;     present, the lesion is mixed-type, not MD). These three are hidden
+    ;     for MD and shown for BD / Mixed. MPD diameter, mural nodule, and
+    ;     all clinical/lab features are type-agnostic and stay.
+    ;   * NotFit is read by _IPMN_Classify only inside the HRS branch, so it
+    ;     appears only once a high-risk stigma is present.
     form.Header("IPMN type and dimensions")
     form.Dropdown("Type", "Type:"
         , ["Branch duct (BD)"
@@ -70,6 +80,7 @@ ShowKyotoIPMNDialog(text := "") {
     form.Header("High-risk stigmata")
     form.Checkbox("Jaundice", "Obstructive jaundice (head/uncinate IPMN)", jaundice)
     form.Checkbox("Cyto", "Suspicious or positive cytology on EUS-FNA", false)
+    form.Checkbox("NotFit", "Patient is NOT a surgical candidate (close surveillance instead)", false)
 
     form.Header("Worrisome features")
     form.Checkbox("WallThick",   "Thickened / enhancing cyst walls", false)
@@ -81,11 +92,51 @@ ShowKyotoIPMNDialog(text := "") {
 
     form.Header("Patient")
     form.Numeric("Age", "Age (years, 0 if unknown):", age)
-    form.Checkbox("NotFit", "Patient is NOT a surgical candidate (close surveillance instead)", false)
+
+    ; Type gates the cyst-specific inputs; NotFit is gated by the four
+    ; inputs that can raise an HRS (Jaundice, Cyto, NodMm >=5, MpdMm >=10).
+    form.OnChange("Type",     _IPMN_UpdateForm)
+    form.OnChange("Jaundice", _IPMN_UpdateForm)
+    form.OnChange("Cyto",     _IPMN_UpdateForm)
+    form.OnChange("NodMm",    _IPMN_UpdateForm)
+    form.OnChange("MpdMm",    _IPMN_UpdateForm)
+    _IPMN_UpdateForm(form)
 
     form.SetSubmit(KyotoIPMN_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
+}
+
+_IPMN_UpdateForm(frm) {
+    ; --- cyst-specific inputs: hidden for pure main-duct (MD) IPMN ---
+    ; MD has no side-branch cyst, so cyst diameter / cyst-wall thickening /
+    ; cyst growth rate do not apply. Hidden CystMm / Growth reset to blank
+    ; (= "not measured"); hidden WallThick resets to unchecked -- so the
+    ; cyst-size WF (>=30 mm) and the cyst-wall WF simply don't fire for MD,
+    ; which is the correct behavior.
+    isMd := InStr(frm.byName["Type"].ctl.Text, "Main")
+    frm.SetVisible("CystMm",    !isMd)
+    frm.SetVisible("Growth",    !isMd)
+    frm.SetVisible("WallThick", !isMd)
+
+    ; --- NotFit: only meaningful when a high-risk stigma is present ---
+    ; Surgical candidacy only changes the output inside the HRS branch.
+    ; Hidden NotFit resets to unchecked = surgical candidate (the default).
+    nod := _IPMN_NumVal(frm, "NodMm")
+    mpd := _IPMN_NumVal(frm, "MpdMm")
+    hrsPresent := (frm.GetValue("Jaundice") = 1)
+               || (frm.GetValue("Cyto") = 1)
+               || (nod >= 5)
+               || (mpd >= 10)
+    frm.SetVisible("NotFit", hrsPresent)
+}
+
+_IPMN_NumVal(frm, name) {
+    if !frm.byName.Has(name)
+        return 0
+    txt := frm.byName[name].ctl.Value
+    return IsNumber(txt) ? txt + 0 : 0
 }
 
 KyotoIPMN_OnSubmit(v, form := "") {

@@ -47,12 +47,18 @@ ShowTIRADSDialog(text := "") {
 
     form := RadsForm("ACR TI-RADS", 540)
 
+    ; Always-needed inputs first: composition (the gate -- cystic /
+    ; spongiform short-circuit to TR1 with zero points) and size (echoed
+    ; in the impression and used for FNA / follow-up thresholds).
     form.Header("Composition (0-2)")
     form.Dropdown("Comp", "Composition:"
         , ["Cystic / almost completely cystic (0)"
         ,  "Spongiform (0)"
         ,  "Mixed cystic and solid (1)"
         ,  "Solid or almost completely solid (2)"], compIdx)
+
+    form.Header("Size")
+    form.Numeric("SizeCm", "Largest diameter (cm):", sz.cm > 0 ? Round(sz.cm, 1) : 0)
 
     form.Header("Echogenicity (0-3)")
     form.Dropdown("Echo", "Echogenicity:"
@@ -79,12 +85,31 @@ ShowTIRADSDialog(text := "") {
     form.Checkbox("FociPunct",   "Punctate echogenic foci (+3)", micro)
     form.Checkbox("FociComet",   "Comet-tail artifact only (+0; usually benign)", comet)
 
-    form.Header("Size")
-    form.Numeric("SizeCm", "Largest diameter (cm):", sz.cm > 0 ? Round(sz.cm, 1) : 0)
+    ; Progressive disclosure: composition gates the four point sections.
+    ; Run once during build so a cystic / spongiform pre-detect opens the
+    ; dialog minimal.
+    form.OnChange("Comp", _TIRADS_UpdateForm)
+    _TIRADS_UpdateForm(form)
 
     form.SetSubmit(TIRADS_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
+}
+
+_TIRADS_UpdateForm(frm) {
+    comp := _TIRADS_Comp(frm.byName["Comp"].ctl.Text)
+    ; Per Tessler 2017 (and _TIRADS_Pts / _TIRADS_Level): cystic and
+    ; spongiform nodules receive ZERO points total and map to TR1 --
+    ; "Do not add further points for other categories". Echogenicity,
+    ; shape, margin, and echogenic foci are provably never read in that
+    ; branch, so hide those whole sections. Size stays visible: it is
+    ; echoed into the impression line regardless of TR level.
+    scored := (comp != "cystic" && comp != "spongiform")
+    frm.SetSectionVisible("Echogenicity (0-3)", scored)
+    frm.SetSectionVisible("Shape (0 or 3)", scored)
+    frm.SetSectionVisible("Margin (0-3)", scored)
+    frm.SetSectionVisible("Echogenic foci (sum, multiple may apply)", scored)
 }
 
 TIRADS_OnSubmit(v, form := "") {

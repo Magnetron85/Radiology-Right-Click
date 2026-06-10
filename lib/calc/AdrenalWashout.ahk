@@ -21,13 +21,15 @@ ShowAdrenalWashoutDialog(text := "") {
 
     form := RadsForm("Adrenal Washout", 460)
     form.Header("CT attenuation (HU)")
-    form.Note("Two-phase (enhanced + delayed) gives relative washout only. Three-phase adds absolute washout.")
-    form.Numeric("Unenh", "Unenhanced HU (optional):", unenh != "" ? Round(unenh) : "")
     form.Numeric("Enh",   "Portal-venous / enhanced HU:", enh != "" ? Round(enh) : "")
     form.Numeric("Delay", "15-minute delayed HU:", delay != "" ? Round(delay) : "")
+    form.Header("Unenhanced phase (optional)")
+    form.Note("Two-phase (enhanced + delayed) gives relative washout only. Adding the unenhanced HU enables absolute washout.")
+    form.Numeric("Unenh", "Unenhanced HU:", unenh != "" ? Round(unenh) : "")
     form.SetSubmit(AdrenalWashout_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 AdrenalWashout_OnSubmit(v, form := "") {
@@ -115,7 +117,9 @@ AdrenalWashout_OnSubmit(v, form := "") {
     unenhDisp := unenh != "" ? _Adr_FmtHU(unenh) : ""
     enhDisp := _Adr_FmtHU(enh)
     delayDisp := _Adr_FmtHU(delay)
-    absWPct := Round(absW, 0)
+    ; absW is "" on the 2-phase path (no unenhanced HU) -- Round("") throws,
+    ; which crashed every 2-phase submission before reaching the result.
+    absWPct := absW != "" ? Round(absW, 0) : ""
     relWPct := Round(relW, 0)
 
     if (unenh != "") {
@@ -142,8 +146,22 @@ AdrenalWashout_OnSubmit(v, form := "") {
     if (interp != "")
         method .= "`n`nInterpretation:`n" interp
 
+    ; Washout thresholds only mean anything when the lesion actually
+    ; enhanced normally -- de-enhancement or a <10 HU change (cyst /
+    ; hemorrhage) produce numerically large but clinically meaningless
+    ; washout percentages. Mirror the verdict branches above so the
+    ; classification can't say "adenoma-suggestive" while the verdict
+    ; says washout doesn't apply.
+    washoutApplies := true
+    if (unenh != "") {
+        if (enhChange < 0 || delChange < 0)
+            washoutApplies := false
+        else if (Abs(enhChange) < 10 && Abs(delChange) < 10)
+            washoutApplies := false
+    }
     return MakeResult({
-        classification: (absW != "" && absW >= 60) || relW >= 40 ? "Adenoma-suggestive washout" : "Indeterminate washout",
+        classification: washoutApplies && ((absW != "" && absW >= 60) || relW >= 40)
+                        ? "Adenoma-suggestive washout" : "Indeterminate washout",
         impression:     impression,
         recommendation: "",
         methodology:    method,
@@ -152,7 +170,10 @@ AdrenalWashout_OnSubmit(v, form := "") {
                                 . "ACR Incidental Findings Committee. "
                                 . "J Am Coll Radiol. 2017 Aug;14(8):1038-1044.",
                            url:  "https://www.acr.org/Clinical-Resources/Incidental-Findings" }],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          relW != "" ? ((absW != "" ? "absolute washout " absWPct "%, " : "")
+                            . "relative washout " relWPct "%") : "",
+        pasteMode:      ""
     })
 }
 

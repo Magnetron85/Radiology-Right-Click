@@ -30,25 +30,31 @@ ShowUSLIRADSDialog(text := "") {
         ,  "\brefractive\s+edge\s+shadow"])
 
     form := RadsForm("US LI-RADS v2024", 520)
+
+    ; Progressive-disclosure layout: mandatory observation / vascular /
+    ; visualization questions first; conditional fields directly below
+    ; their gating field and HIDDEN until relevant (Benign + Size only
+    ; once an observation is asserted; the VIS-C risk-modifier section
+    ; only for visualization C); optional AFP last.
     form.Header("Observation")
     form.Dropdown("Obs", "Focal observation present?", ["No","Yes"], hasObs ? 2 : 1)
-    form.Dropdown("Benign", "If yes, definitely benign (cyst, hemangioma, focal fat, calcified granuloma)?", ["No","Yes"], 1)
+    form.Dropdown("Benign", "Definitely benign (cyst, hemangioma, focal fat, calcified granuloma)?", ["No","Yes"], 1)
     form.Numeric("Size", "Observation size (mm, 0 if none):", sz.mm > 0 ? Round(sz.mm) : 0)
     form.Checkbox("Distortion", "Parenchymal distortion >=10 mm (ill-defined heterogeneity, refractive edge shadows, loss of architecture)", hasDistortion)
     form.Spacer(6)
     form.Header("Vascular")
     form.Checkbox("Thrombus", "New thrombus in portal/hepatic vein", hasThrombus)
     form.Spacer(6)
-    form.Header("AFP (optional)")
-    form.Checkbox("AfpPos", "AFP positive (>=20 ng/mL OR doubling on 2 consecutive tests)", false)
-    form.Spacer(6)
     form.Header("Visualization score")
     form.Dropdown("Viz", "Image quality:"
         , ["A -- no or minimal limitations"
         ,  "B -- moderate limitations"
         ,  "C -- severe limitations"], 1)
-    form.Header("VIS-C risk modifiers (only relevant if Visualization = C)")
+    form.Header("VIS-C risk modifiers")
     form.Checkbox("VizRisk", "MASH- or EtOH-related cirrhosis, Child-Turcotte-Pugh class B/C, or BMI >=35 kg/m^2", false)
+    form.Spacer(6)
+    form.Header("AFP (optional)")
+    form.Checkbox("AfpPos", "AFP positive (>=20 ng/mL OR doubling on 2 consecutive tests)", false)
     form.OnChange("Viz", _USLI_UpdateViz)
     form.OnChange("Obs", _USLI_UpdateObs)
     _USLI_UpdateViz(form)
@@ -57,16 +63,23 @@ ShowUSLIRADSDialog(text := "") {
     form.SetSubmit(USLIRADS_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 _USLI_UpdateViz(frm) {
     isC := InStr(frm.byName["Viz"].ctl.Text, "C --")
-    frm.SetEnabled("VizRisk", isC)
+    ; _USLI_Viz only consults vizRisk for the "C" management row, so the
+    ; whole risk-modifier section is hidden unless visualization is C.
+    frm.SetSectionVisible("VIS-C risk modifiers", isC)
 }
 _USLI_UpdateObs(frm) {
     hasObs := frm.byName["Obs"].ctl.Text = "Yes"
-    frm.SetEnabled("Benign", hasObs)
-    frm.SetEnabled("Size",   hasObs)
+    ; _USLI_Classify reads isBen / size only on hasObs rule rows, so both
+    ; are hidden (and reset to their defaults) when no observation is
+    ; asserted. Distortion and thrombus categorize independently of an
+    ; observation, so they stay visible.
+    frm.SetVisible("Benign", hasObs)
+    frm.SetVisible("Size",   hasObs)
 }
 
 USLIRADS_OnSubmit(v, form := "") {

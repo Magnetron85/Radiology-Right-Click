@@ -37,6 +37,7 @@ ShowThymusDialog(text := "") {
     form.SetSubmit(Thymus_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 Thymus_OnSubmit(v, form := "") {
@@ -94,7 +95,10 @@ Thymus_OnSubmit(v, form := "") {
                                 . "anterior mediastinal tumors with dual-echo chemical-shift MR "
                                 . "imaging in adulthood. Radiology. 2015 Jan;274(1):238-49.",
                            url:  "https://pubs.rsna.org/doi/10.1148/radiol.14132665" }],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          sii != "" ? ((csr != "" ? "chemical shift ratio " Round(csr, 3) ", " : "")
+                            . "signal intensity index " Round(sii, 2) "%") : "",
+        pasteMode:      ""
     })
 }
 
@@ -153,6 +157,6 @@ _InterpretThymus(csr, sii) {
         out := "Error: Both Chemical Shift Ratio and Signal Intensity Index are missing.`n`n"
     }
     if showCit
-        out .= "Citation: Priola AM, Priola SM, Ciccone G, Evangelista A, Cataldi A, Gned D, Pazè F, Ducco L, Moretti F, Brundu M, Veltri A. Differentiation of rebound and lymphoid thymic hyperplasia from anterior mediastinal tumors with dual-echo chemical-shift MR imaging in adulthood: reliability of the chemical-shift ratio and signal intensity index. Radiology. 2015 Jan;274(1):238-49. doi: 10.1148/radiol.14132665. Epub 2014 Aug 7. PMID: 25105246.`n"
+        out .= "Citation: Priola AM, Priola SM, Ciccone G, Evangelista A, Cataldi A, Gned D, Paze F, Ducco L, Moretti F, Brundu M, Veltri A. Differentiation of rebound and lymphoid thymic hyperplasia from anterior mediastinal tumors with dual-echo chemical-shift MR imaging in adulthood: reliability of the chemical-shift ratio and signal intensity index. Radiology. 2015 Jan;274(1):238-49. doi: 10.1148/radiol.14132665. Epub 2014 Aug 7. PMID: 25105246.`n"
     return out
 }

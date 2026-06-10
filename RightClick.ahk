@@ -115,7 +115,11 @@ HandleRightClick(*) {
     if (hwnd != WinExist("A")) {
         try {
             WinActivate("ahk_id " hwnd)
-            Sleep 30
+            ; Wait for activation (bounded) instead of a fixed 30 ms nap --
+            ; heavyweight hosts (PowerScribe) can take longer to take focus,
+            ; and the Ctrl+C capture that follows lands on the wrong window
+            ; if we race ahead.
+            WinWaitActive("ahk_id " hwnd, , 0.3)
             MouseMove(ox, oy, 0)
         }
     }

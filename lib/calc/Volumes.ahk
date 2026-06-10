@@ -51,6 +51,7 @@ ShowVolumeDialog(text, title, calcFn) {
     form.SetSubmit(Volume_OnSubmit.Bind(calcFn))
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 Volume_OnSubmit(calcFn, v, form := "") {
@@ -90,7 +91,11 @@ Volume_OnSubmit(calcFn, v, form := "") {
         recommendation: "",
         methodology:    method,
         citations:      [],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        ; Parenthetical append: "...measures 3.1 x 2.2 x 2.8 cm (ellipsoid
+        ; volume 10.0 mL)." reads naturally inside the findings sentence.
+        paste:          volNum != "" ? StrLower(formulaLabel) " volume " volNum " mL" : "",
+        pasteMode:      ""
     })
 }
 

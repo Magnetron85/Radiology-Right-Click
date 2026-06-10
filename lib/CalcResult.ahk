@@ -14,6 +14,11 @@
 ;   citations[]       array of { text, url } -- ACR / DOI links
 ;   echo              raw user selection, shown only when transformed
 ;   error             error message; if non-empty, only impression renders
+;   paste             short inline fragment ("ellipsoid volume 4.3 mL")
+;                     used by PasteText for parenthetical append
+;   pasteMode         how PasteText composes selection + result:
+;                     "paren" | "inline" | "newline" | "replace"
+;                     "" (default) -> "paren" when paste is set, else "newline"
 ;
 ; Every field is optional. Use MakeResult({}) to construct; the
 ; helper fills missing fields with safe defaults so RenderResult
@@ -38,7 +43,9 @@ MakeResult(fields) {
            , methodology:    ""
            , citations:      []
            , echo:           ""
-           , error:          "" }
+           , error:          ""
+           , paste:          ""
+           , pasteMode:      "" }
     ; Copy any provided fields onto the result. Accept either a
     ; plain object (props) or a Map.
     if (fields is Map) {
@@ -161,6 +168,56 @@ ClipboardText(result, opts := "") {
         && !InStr(result.impression, result.recommendation))
         out .= "`n" _Sanitize(result.recommendation)
     return out
+}
+
+; Compose the paste-ready payload: the user's original highlighted text
+; with the calculator result appended in the style the module asked for.
+; This is what lands on the clipboard when a result window opens, so the
+; radiologist can select -> run -> paste over the selection and the report
+; reads cleanly with no manual stitching.
+;
+; Modes (result.pasteMode, falling back per the rules below):
+;   "paren"    selection (fragment)         -- e.g. "3.1 x 2.2 x 2.8 cm
+;              (ellipsoid volume 10.0 mL)." Requires result.paste.
+;   "inline"   selection. Result sentence.  -- same line, sentence-joined
+;   "newline"  selection NEWLINE result     -- result on its own line
+;   "replace"  result only                  -- for calcs that transform the
+;              selection itself (e.g. Sort Sizes), pasting replaces it
+;
+; A multi-line selection always falls back to "newline" -- parenthetical /
+; inline composition only reads cleanly within a single sentence. An empty
+; selection returns just the result body.
+PasteText(result, selection := "") {
+    if !IsCalcResult(result)
+        return _Sanitize(IsObject(result) ? "" : result)
+    if (result.error != "")
+        return _Sanitize(result.error)
+
+    body := ClipboardText(result)
+    sel := RTrim(_Sanitize(selection), " `t`r`n")
+    if (sel = "")
+        return body
+
+    mode := result.pasteMode != "" ? result.pasteMode
+          : (result.paste != "")   ? "paren"
+          :                          "newline"
+    if (mode = "replace")
+        return body
+    if (mode != "newline" && InStr(sel, "`n"))
+        mode := "newline"
+    if (mode = "paren" && result.paste != "") {
+        frag := _Sanitize(result.paste)
+        ; Keep the selection's sentence-final period after the parenthetical:
+        ; "...measures 3.1 x 2.2 cm." -> "...measures 3.1 x 2.2 cm (frag)."
+        if (SubStr(sel, -1) = ".")
+            return SubStr(sel, 1, StrLen(sel) - 1) " (" frag ")."
+        return sel " (" frag ")"
+    }
+    if (mode = "inline") {
+        joiner := RegExMatch(sel, "[.;:,]$") ? " " : ". "
+        return sel joiner body
+    }
+    return sel "`n" body
 }
 
 ; ---- Sanitization -------------------------------------------------

@@ -50,9 +50,14 @@ LungRADS_Entry(input) {
 ShowLungRADSDialog(initialText := "") {
     sz := TextScan.Size(initialText)
     comp := TextScan.Composition(initialText)
-    typeIdx := (comp = "ground glass") ? 3
-            : (comp = "part solid")   ? 2
+    typeIdx := (comp = "ground glass") ? 4
+            : (comp = "part solid")   ? 3
             : 1
+    ; Cavitary nodule -- note 12d: wall thickening is the dominant feature, so
+    ; it is classified on the solid-nodule pathway (total mean diameter).
+    ; Detect it explicitly since TextScan.Composition has no cavitary category.
+    if RegExMatch(initialText, "i)\bcavitary\b|\bcavitation\b|\bcavitating\b")
+        typeIdx := 2
 
     ; Auto-detect 4X features (note 14) from the highlighted sentence.
     ; These are PER-NODULE descriptors -- "8 mm spiculated nodule" is
@@ -81,27 +86,47 @@ ShowLungRADSDialog(initialText := "") {
 
     form := RadsForm("Lung-RADS v2022", 620)
 
-    ; Form is organized around the reading radiologist's actual workflow:
-    ; (1) identify the most suspicious nodule + measure it,
-    ; (2) check obvious benign morphologic overrides (calcification, fat,
-    ;     juxtapleural -- these short-circuit to Cat 1/2),
-    ; (3) determine screening context + prior comparison (drives the
-    ;     baseline vs new vs growing size cuts),
-    ; (4) part-solid-specific component-growth question (note 5),
-    ; (5) type-specific morphology (airway location, atypical cyst),
-    ; (6) downgrade rules + S modifier,
-    ; (7) free-text description (scanned for 4X / infectious features).
-
+    ; Progressive-disclosure layout. Mandatory context first (what is it,
+    ; which screening round, how big); everything conditional appears
+    ; directly below the field that makes it relevant and is HIDDEN (not
+    ; greyed) until then:
+    ;   * SolidMm + component-growth row     -> only for part-solid
+    ;   * AirwayLoc                          -> only for airway nodules
+    ;   * CystFeat                           -> only for atypical cysts
+    ;   * BenignFeat                         -> only for parenchymal types
+    ;   * whole "Prior comparison" section   -> only for incident rounds
+    ;     of parenchymal lesions (a baseline scan has no prior)
     form.Header("Nodule")
     form.Dropdown("LType", "Lesion type:"
         , ["Solid nodule"
+        ,  "Cavitary nodule (wall thickening dominant -- managed as solid, note 12d)"
         ,  "Part-solid nodule"
         ,  "Ground-glass nodule (GGN)"
         ,  "Atypical pulmonary cyst"
         ,  "Airway nodule"], typeIdx)
+    form.Dropdown("Round", "Screening round:"
+        , ["Baseline (first screen)"
+        ,  "Incident (new, increased, or decreased from prior)"], 1)
     form.NumericRow2(
-        "SizeMm",  "Mean diameter (mm):", "SolidMm", "Solid component (mm; part-solid):"
+        "SizeMm",  "Mean diameter (mm):", "SolidMm", "Solid component (mm):"
       , sz.mm > 0 ? Round(sz.mm, 1) : 0, 0)
+    form.CheckboxNumericRow(
+        "NewGrowSolidComp", "Solid component new/growing (note 5)"
+      , "NewSolidMm",       "New/growing comp. (mm):", false, 0)
+    form.Dropdown("AirwayLoc", "Airway location:"
+        , ["N/A"
+        ,  "Subsegmental"
+        ,  "Segmental or more proximal -- at baseline"
+        ,  "Segmental or more proximal -- stable or growing on follow-up"], 1)
+    form.Dropdown("CystFeat", "Atypical cyst features (note 12):"
+        , ["N/A"
+        ,  "Cat 3: Growing cystic component of a thick-walled cyst"
+        ,  "Cat 4A: Thick-walled cyst"
+        ,  "Cat 4A: Multilocular cyst at baseline"
+        ,  "Cat 4A: Thin- or thick-walled that becomes multilocular"
+        ,  "Cat 4B: Thick-walled with growing wall thickness or nodularity"
+        ,  "Cat 4B: Growing multilocular cyst"
+        ,  "Cat 4B: Multilocular with new/increased loculation or opacity"], 1)
     form.Dropdown("BenignFeat", "Benign features (Cat 1 / Cat 2 override):"
         , ["None"
         ,  "Benign calcification (complete / central / popcorn / concentric ring)"
@@ -109,10 +134,7 @@ ShowLungRADSDialog(initialText := "") {
         ,  "Juxtapleural <10 mm, solid, smooth, oval / lentiform / triangular"
         ,  "No nodules"], 1)
 
-    form.Header("Prior comparison and growth")
-    form.Dropdown("Round", "Round:"
-        , ["Baseline (first screen)"
-        ,  "Incident (new, increased, or decreased from prior)"], 1)
+    form.Header("Prior comparison")
     form.NumericRow2(
         "PriorMm", "Prior diameter (mm; 0=no prior):", "IntervalMo", "Months since prior (0=no prior):", 0, 0)
     form.Dropdown("PriorCat", "Prior Lung-RADS category (auto-inferred for solid / GGN -- override if known):"
@@ -141,25 +163,6 @@ ShowLungRADSDialog(initialText := "") {
         ,  "Cat 3 stable/decreased at 6-mo follow-up (downgrade to Cat 2)"
         ,  "Cat 4A stable/decreased at 3-mo follow-up (downgrade to Cat 3; excludes airway)"
         ,  "Previously biopsied or proven benign by diagnostic workup (downgrade to Cat 2)"], 1)
-
-    form.Header("Type-specific features")
-    form.CheckboxNumericRow(
-        "NewGrowSolidComp", "Part-solid: solid comp. new/growing (note 5)"
-      , "NewSolidMm",       "Solid comp. size (mm):", false, 0)
-    form.Dropdown("AirwayLoc", "Airway location:"
-        , ["N/A"
-        ,  "Subsegmental"
-        ,  "Segmental or more proximal -- at baseline"
-        ,  "Segmental or more proximal -- stable or growing on follow-up"], 1)
-    form.Dropdown("CystFeat", "Atypical cyst features (note 12):"
-        , ["N/A"
-        ,  "Cat 3: Growing cystic component of a thick-walled cyst"
-        ,  "Cat 4A: Thick-walled cyst"
-        ,  "Cat 4A: Multilocular cyst at baseline"
-        ,  "Cat 4A: Thin- or thick-walled that becomes multilocular"
-        ,  "Cat 4B: Thick-walled with growing wall thickness or nodularity"
-        ,  "Cat 4B: Growing multilocular cyst"
-        ,  "Cat 4B: Multilocular with new/increased loculation or opacity"], 1)
 
     form.Header("Features and modifiers (notes 10 / 14 / 15)")
     form.CheckboxRow2("Spiculated",     "Spiculation"
@@ -192,27 +195,29 @@ ShowLungRADSDialog(initialText := "") {
     form.SetSubmit(LungRADS_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 _LUR_UpdateForm(frm, priorCatChanged := false) {
     t := _LUR_TypeFromLabel(frm.byName["LType"].ctl.Text)
-    isParenchymal := (t = "solid" || t = "part-solid" || t = "ggn")
+    isParenchymal := (t = "solid" || t = "cavitary" || t = "part-solid" || t = "ggn")
     isIncident := !InStr(frm.byName["Round"].ctl.Text, "Baseline")
 
-    frm.SetEnabled("SolidMm",          t = "part-solid")
-    frm.SetEnabled("NewGrowSolidComp", t = "part-solid")
-    frm.SetEnabled("NewSolidMm",       t = "part-solid")
-    frm.SetEnabled("AirwayLoc", t = "airway")
-    frm.SetEnabled("CystFeat",  t = "cyst")
+    ; Progressive disclosure: irrelevant questions are HIDDEN (the form
+    ; reflows and resizes), not greyed. A hidden control reverts to its
+    ; default so the classifier never reads a stale answer.
+    frm.SetVisible("SolidMm",          t = "part-solid")
+    frm.SetVisible("NewGrowSolidComp", t = "part-solid")
+    frm.SetVisible("NewSolidMm",       t = "part-solid")
+    frm.SetVisible("AirwayLoc",  t = "airway")
+    frm.SetVisible("CystFeat",   t = "cyst")
+    frm.SetVisible("BenignFeat", isParenchymal)
 
     ; Prior + Interval + PriorCat + the unified Behavior dropdown are
     ; only meaningful for incident parenchymal lesions. A baseline (first
     ; screen) has no prior to be growing-from / stable-from / decreased-from.
     autoEnabled := isParenchymal && isIncident
-    frm.SetEnabled("PriorMm",    autoEnabled)
-    frm.SetEnabled("IntervalMo", autoEnabled)
-    frm.SetEnabled("PriorCat",   autoEnabled)
-    frm.SetEnabled("Behavior",   autoEnabled)
+    frm.SetSectionVisible("Prior comparison", autoEnabled)
 
     if !autoEnabled
         return
@@ -443,6 +448,8 @@ LungRADS_OnSubmit(v, form := "") {
 _LUR_TypeWord(t) {
     if (t = "solid")
         return "solid"
+    if (t = "cavitary")
+        return "cavitary"
     if (t = "part-solid")
         return "part-solid"
     if (t = "ggn")
@@ -474,6 +481,8 @@ _LUR_ShortRec(cat) {
 }
 
 _LUR_TypeFromLabel(label) {
+    if InStr(label, "Cavitary")
+        return "cavitary"
     if InStr(label, "Atypical")
         return "cyst"
     if InStr(label, "Airway")
@@ -576,8 +585,13 @@ _LUR_Classify(ntype, size, isBaseline, solidMm, text, isGrowing
     }
 
     ; ---- Step 4: standard solid / part-solid / GGN size classifier ----
-    if (ntype = "solid")
+    ; A cavitary nodule is classified on the solid pathway by total mean
+    ; diameter (note 12d); the only difference is the advisory we attach.
+    if (ntype = "solid" || ntype = "cavitary") {
         r := _LUR_Solid(size, isBaseline, isGrowing, isStableDecreased)
+        if (ntype = "cavitary")
+            r.note := "Cavitary nodule: wall thickening is the dominant feature; managed as a solid nodule by total mean diameter (Lung-RADS v2022 note 12d)."
+    }
     else if (ntype = "part-solid")
         r := _LUR_PartSolid(size, solidMm, isBaseline, newGrowSolidComp, newSolidMm, isStableDecreased)
     else if (ntype = "ggn")
@@ -588,7 +602,7 @@ _LUR_Classify(ntype, size, isBaseline, solidMm, text, isGrowing
     ; ---- Step 5: slow-growth over multiple screenings -> Cat 4B (note 8) ----
     ; Applies to solid AND part-solid lesions only (not GGN; GGN slow-growth
     ; goes to Cat 2 per note 7, which is already handled by the GGN classifier).
-    if (slowGrowth && (ntype = "solid" || ntype = "part-solid")) {
+    if (slowGrowth && (ntype = "solid" || ntype = "part-solid" || ntype = "cavitary")) {
         ; Only upgrade if the size-derived category is below 4B already.
         if (r.category = "3" || r.category = "4A") {
             base := r.category

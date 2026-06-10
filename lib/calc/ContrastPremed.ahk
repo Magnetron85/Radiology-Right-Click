@@ -65,6 +65,7 @@ ShowContrastPremedDialog() {
     ApplyModernChrome(g, dark)
     g.Show("x" pos.x " y" pos.y " w" w " h" h)
     WinActivate("ahk_id " g.Hwnd)
+    return g   ; for GUI smoke tests
 }
 
 _DefaultPremedDateTime() {

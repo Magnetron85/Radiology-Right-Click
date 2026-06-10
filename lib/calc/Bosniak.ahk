@@ -30,6 +30,16 @@ ShowBosniakDialog(text := "") {
     calc  := TextScan.ContainsAny(text, ["\bcalcified\b","\bcalcification"])
     form := RadsForm("Bosniak 2019", 580)
 
+    ; Progressive-disclosure layout. Mandatory context (modality, wall /
+    ; septa morphology) sits at the top; every conditional input appears
+    ; directly below the field that makes it relevant and is HIDDEN (the
+    ; form reflows and resizes), not greyed, until then:
+    ;   * IrregMm                          -> only when wall/septa enhance
+    ;     (the classifier reads it only inside the `if enh` branch)
+    ;   * NodMm / NodMargin / NodEnh       -> only when a protrusion exists
+    ;   * NodCalc                          -> protrusion present AND CT
+    ;   * HyperCT                          -> CT only
+    ;   * T2Hyper / T1Hyper / T1Hetero     -> MRI only
     form.Header("Modality")
     form.Dropdown("Modality", "Imaging:", ["CT", "MRI"], 1)
 
@@ -38,6 +48,7 @@ ShowBosniakDialog(text := "") {
     form.Numeric("SeptaCnt", "Septa count (0 = none):", 0)
     form.Numeric("SeptaMm", "Max septa thickness (mm):", 0)
     form.Checkbox("EnhWall", "Wall or septa enhance", false)
+    form.Numeric("IrregMm", "Irregular protrusion size (<=3 mm obtuse, 0 if none):", 0)
 
     form.Header("Convex protrusion (nodule)")
     form.Checkbox("HasNod", "Convex protrusion present", false)
@@ -46,7 +57,6 @@ ShowBosniakDialog(text := "") {
         , ["Obtuse (wide base)", "Acute (sharp angle)"], 1)
     form.Checkbox("NodEnh",  "Protrusion enhances", false)
     form.Checkbox("NodCalc", "Protrusion is calcified (CT only)", false)
-    form.Numeric("IrregMm", "Irregular protrusion size (<=3 mm obtuse, 0 if none):", 0)
 
     form.Header("Other features")
     form.Checkbox("HyperCT",  "Homogeneous >=70 HU on noncontrast CT", false)
@@ -56,36 +66,37 @@ ShowBosniakDialog(text := "") {
     form.Checkbox("Fluid",    "Simple fluid (-9 to 20 HU or CSF-like T2)", fluid)
     form.Checkbox("CalsOnly", "Calcification only, no other complex features", calc)
 
-    ; Protrusion subfields only relevant when a convex protrusion is present.
-    form.OnChange("HasNod", _Bos_UpdateNod)
-    ; Modality-specific fields: CT-only (HyperCT, NodCalc) and MRI-only
-    ; (T2Hyper, T1Hyper, T1Hetero) exclusivity.
-    form.OnChange("Modality", _Bos_UpdateModality)
-    _Bos_UpdateModality(form)
-    _Bos_UpdateNod(form)
+    form.OnChange("Modality", _Bos_UpdateForm)
+    form.OnChange("HasNod",   _Bos_UpdateForm)
+    form.OnChange("EnhWall",  _Bos_UpdateForm)
+    _Bos_UpdateForm(form)
 
     form.SetSubmit(Bosniak_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
-_Bos_UpdateNod(frm) {
+_Bos_UpdateForm(frm) {
+    isCT   := frm.GetValue("Modality") = 1
     hasNod := !!frm.GetValue("HasNod")
-    for f in ["NodMm", "NodMargin", "NodEnh", "NodCalc"]
-        frm.SetEnabled(f, hasNod)
-    ; NodCalc is also CT-only -- re-check that constraint.
-    if hasNod && frm.GetValue("Modality") != 1
-        frm.SetEnabled("NodCalc", false)
-}
+    enhW   := !!frm.GetValue("EnhWall")
 
-_Bos_UpdateModality(frm) {
-    isCT := frm.GetValue("Modality") = 1
-    frm.SetEnabled("HyperCT",  isCT)
-    frm.SetEnabled("T2Hyper",  !isCT)
-    frm.SetEnabled("T1Hyper",  !isCT)
-    frm.SetEnabled("T1Hetero", !isCT)
-    ; NodCalc requires both HasNod AND CT
-    frm.SetEnabled("NodCalc", isCT && !!frm.GetValue("HasNod"))
+    ; A hidden control reverts to its default, so the classifier never
+    ; reads a stale answer: IrregMm/NodMm -> 0, checkboxes -> unchecked,
+    ; NodMargin -> first option -- all of which the classifier provably
+    ; treats as "absent / not applicable" on the hidden branch.
+    frm.SetVisible("IrregMm", enhW)
+
+    frm.SetVisible("NodMm",     hasNod)
+    frm.SetVisible("NodMargin", hasNod)
+    frm.SetVisible("NodEnh",    hasNod)
+    frm.SetVisible("NodCalc",   hasNod && isCT)
+
+    frm.SetVisible("HyperCT",  isCT)
+    frm.SetVisible("T2Hyper",  !isCT)
+    frm.SetVisible("T1Hyper",  !isCT)
+    frm.SetVisible("T1Hetero", !isCT)
 }
 
 Bosniak_OnSubmit(v, form := "") {

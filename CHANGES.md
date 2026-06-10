@@ -1,3 +1,43 @@
+# v2.1 -> v2.1.1 changes
+
+## Calculator dialog overhaul (progressive disclosure)
+
+- **The form engine (`lib/FormGui.ahk`) now supports true progressive disclosure.** `SetVisible` HIDES an irrelevant field (instead of greying it), collapses its space -- rows below slide up and the window resizes live, flicker-free -- and resets the hidden control to its default so a stale answer can never reach the classifier; re-showing restores the user's prior value. New `SetSectionVisible` toggles an entire header section in one relayout.
+- **Every dialog reorganized: mandatory context first, conditional questions appear only when a previous answer makes them relevant.** Examples: Lung-RADS opens with just lesion type / screening round / size -- the solid-component fields appear only for part-solid, airway location only for airway nodules, cyst features only for atypical cysts, and the whole prior-comparison section only for incident rounds. LI-RADS collapses to two checkboxes when LR-NC or TIV is asserted, and its LR-M criteria / ancillary-adjustment blocks expand on demand. PI-RADS hides T2 for PZ and DCE for TZ (where the v2.1 algorithm never reads them). TI-RADS hides echogenicity / shape / margin / foci for cystic and spongiform nodules (auto TR1). O-RADS US/MRI show only the descriptors for the selected lesion category. PSA density hides the three dimension fields the moment a measured volume is typed. Bosniak, gallbladder polyp, incidental adrenal / thyroid, Kyoto IPMN, US LI-RADS, and pregnancy dates gained equivalent gating; simple measurement forms were reordered mandatory-first with optional inputs under clearly-labeled optional headers.
+- **Visual refresh**: accent-colored section headers over hairline rules, dark-mode aware, Win11 rounded corners retained.
+- **High-DPI fix**: the window-fits-screen cap compared DPI-scaled logical units against physical pixels, so tall dialogs could run off the bottom of the screen on scaled displays (common on laptops); the cap and the position clamp are now unit-correct.
+- Hidden blank-default numeric fields now reset to blank, not 0 -- a synthetic 0 read as a real measured value (e.g. 0 HU) in classifiers.
+- New layout test suite: `tests/test_gui_smoke.ahk` opens all 28 dialogs, audits control overlap and screen fit, and exercises the Lung-RADS disclosure end-to-end (95 checks); `tests/_reflow_smoke.ahk` covers the reflow engine itself.
+
+## PowerScribe 360 reliability
+
+- **Menu Cut / Copy / Paste / Delete now use SendEvent.** AHK v2's default `Send` (SendInput) bypasses the message queue, so hosts with low-level keyboard hooks (PowerScribe / Dragon) never saw the keystroke -- these menu items silently did nothing there while working fine in Notepad.
+- **Selection capture hardened** (`GetSelectedText`): the Ctrl+C now has a real 20 ms press duration, and on a miss the capture falls back to (1) `WM_COPY` posted directly at the focused control (no keyboard involved, immune to hooks) and (2) one slower Ctrl+C retry. Debug log records which stage succeeded.
+- **Right-click activation race fixed**: `HandleRightClick` now waits (bounded, 300 ms) for the target window to actually take focus instead of a fixed 30 ms nap, so the capture can't fire against the wrong window in slow hosts.
+
+## Paste-ready clipboard output
+
+- **New paste composition layer** (`PasteText` in `lib/CalcResult.ahk`): when a result window opens, the clipboard now holds the original highlighted text with the result appended per the module's declared style, so select -> run -> paste over the selection yields a clean report line. Modes: `paren` ("...3.1 x 2.2 x 2.8 cm (ellipsoid volume 10.0 mL)."), `inline`, `newline` (default; RADS impressions append on their own line), `replace`. Multi-line selections always fall back to newline composition.
+- Per-module parenthetical fragments added: Ellipsoid/Bullet volume, PSA density, adrenal washout, thymus chemical shift, hepatic fat fraction, liver iron (LIC), calcium score percentile, NASCET, statistics, range, and measurement comparison.
+- New pref `clipboard.includeSelection` (default `true`); set `false` in `preferences.json` to restore the old result-only clipboard.
+- "Copy impression" still copies the result alone; "Copy with methodology" unchanged.
+
+## Bug fixes
+
+- **Adrenal washout: 2-phase submissions crashed** (`Round("")` on the absent absolute-washout value) -- every enhanced+delayed-only calculation died with a "Calculation error" box. Also, the classification can no longer read "Adenoma-suggestive washout" when the verdict says washout does not apply (de-enhancement / non-enhancing lesion).
+- **PSA density now reports 2 decimals** -- the clinical cutoff is 0.15 ng/mL/cc; the old 1-decimal rounding (0.1 / 0.2) destroyed the answer at the decision boundary.
+- **Calcium score: Hoff percentile band labels were shifted one band low** in methodology and the legacy path ("75th-90th" reported as "50-75%"); bands now match the impression label. Age parsing anchored so "Coverage: 55" can't parse as Age 55.
+- **NASCET: the legacy parser's own documented example never matched** (regex required no space between number and unit); units are now captured and cm values normalize to mm everywhere; swapped distal/stenosis entries are rejected instead of reporting a negative stenosis.
+- **Measurement comparison ("previously X ... now Y" word order) read the wrong regex groups** -- the current measurement could be built from a date and its date from the unit ("cm").
+- **Number Range: unit detection** no longer matches one-letter prefixes ("5 ml" reported unit "m"); alternation is longest-first with a letter-boundary lookahead.
+- Hepatic steatosis legacy path: spleen-normalized FF annotation is anchored to the exact appended tag instead of the first `)` in the output (a parenthesis inside the selection corrupted the line).
+- Fleischner dual-risk impression now reads as prose ("if low risk, ...; if high risk, ...") instead of label-style "low-risk:" / "high-risk:" headers.
+- Result popup: Close button is pinned to the right edge (it overlapped "Copy impression" at minimum window width); minimum width raised to fit the button row.
+- Test harness repaired (`_PIRADS_Score` arity, two stale assertions); full suite green: 21/21 calculator + 41/41 algorithm tests.
+- ASCII hygiene: accented character removed from the Priola citation (legacy thymus path).
+
+---
+
 # v2.0 -> v2.1 changes
 
 v2.1 adds a second class of calculator -- guided form-based classifiers for the major ACR Reporting and Data Systems and incidental-findings white papers -- alongside the v2.0 text-parse calculators.

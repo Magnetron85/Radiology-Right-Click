@@ -206,6 +206,13 @@ class Prefs {
         d["menu"] := Map(
             "sortingMethod", "grouped"  ; grouped (anatomical) | alphabetical | frequency | none
         )
+        d["clipboard"] := Map(
+            ; When true, the clipboard payload loaded on result-window open is
+            ; the original highlighted text + the result composed per the
+            ; module's pasteMode (see CalcResult.PasteText), so pasting over
+            ; the selection yields a clean report line. False -> result only.
+            "includeSelection", true
+        )
         d["references"] := []
         d["frequency"]  := Map()
         return d

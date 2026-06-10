@@ -79,7 +79,10 @@ ShowResult(payload) {
     linksH  := _MeasureLinksHeight(result, true)
     sectionGap := 8
 
-    w := Min(Max(tw + pad*2 + 24, 460), maxW)
+    ; Min width 520: the button row (180 + 160 + 100 + two 12px gaps) plus
+    ; side padding needs 496px -- at the old 460 minimum the right-aligned
+    ; Close button overlapped "Copy impression".
+    w := Min(Max(tw + pad*2 + 24, 520), maxW)
     contentH := th + chkH + sectionGap + linksH + btnH + sectionGap*2
     h := Min(Max(contentH + pad*2, 260), maxH)
 
@@ -141,8 +144,10 @@ ShowResult(payload) {
         , "Copy impression")
     btnCopy.OnEvent("Click", (*) => _CopyImpression(state))
 
+    ; Pin to the right edge (absolute x) -- a relative x+ offset goes
+    ; negative on narrow windows and overlaps the previous button.
     btnClose := g.Add("Button"
-        , "Default x+" (w - pad*2 - 180 - 160 - 12 - 100 - 12) " yp w100 h" btnH
+        , "Default x" (w - pad - 100) " yp w100 h" btnH
           . " +Background" palette["btnBg"] " c" palette["btnFg"]
         , "Close")
     ; Closing the result window also clears the captured-text cache. This
@@ -179,8 +184,19 @@ ShowResult(payload) {
     btnClose.GetPos(&bx, &by, &bw, &bh)
     MouseMove(pos.x + bx + bw/2, pos.y + by + bh/2, 0)
 
-    ; Initial clipboard payload is the safe impression-only string.
-    A_Clipboard := ClipboardText(result)
+    ; Initial clipboard payload: paste-ready composition of the user's
+    ; original selection + this result (per the module's pasteMode), so
+    ; select -> run -> paste reproduces the highlighted text with the
+    ; result appended cleanly. Falls back to impression-only when there
+    ; was no selection or the pref is off.
+    global g_LastSelectedText
+    if Prefs.Get("clipboard", "includeSelection", true) {
+        A_Clipboard := PasteText(result, g_LastSelectedText)
+        if (g_LastSelectedText != "")
+            g.Title := "Result -- paste-ready text on clipboard"
+    } else {
+        A_Clipboard := ClipboardText(result)
+    }
 }
 
 ; Toggle handler -- re-renders the edit with the new state and

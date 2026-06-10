@@ -57,13 +57,15 @@ ShowPIRADSDialog(text := "") {
     form.Dropdown("Zone", "Zone:", ["PZ (peripheral)", "TZ (transition)"], zoneIdx)
 
     form.Header("Sequence morphology scores (1-5)")
-    form.Note("PZ: DWI dominant; DCE upgrades DWI=3 to 4 if positive. TZ: T2 dominant; DWI is a tiebreaker for T2=2/3. T2 is not used in PZ; DCE is not used in TZ -- those fields gray out when the other zone is selected. Score 4 is hidden when size >=1.5 cm or EPE is checked (those triggers force a 5). Score 5 is hidden when size is <1.5 cm AND no EPE -- v2.1 has no defined score-5 morphology without one of those triggers.")
+    form.Note("PZ: DWI dominant; DCE upgrades DWI=3 to 4 if positive. TZ: T2 dominant; DWI is a tiebreaker for T2=2/3. T2 is not used in PZ; DCE is not used in TZ -- those fields are hidden when the other zone is selected. Score 4 is hidden when size >=1.5 cm or EPE is checked (those triggers force a 5). Score 5 is hidden when size is <1.5 cm AND no EPE -- v2.1 has no defined score-5 morphology without one of those triggers.")
     form.Dropdown("T2",  "T2W score [TZ only -- not used in PZ]:", ["1","2","3","4","5"], 3)
     form.Dropdown("DWI", "DWI / ADC score:", ["1","2","3","4","5"], 3)
     form.Dropdown("DCE", "DCE [PZ only -- not used in TZ]:", ["Negative","Positive"], 1)
 
     ; Wire dynamic updates:
-    ;   Zone   -> enable/disable T2 / DCE per dominant-sequence table.
+    ;   Zone   -> show/hide T2 / DCE per dominant-sequence table
+    ;             (progressive disclosure: the irrelevant sequence field
+    ;             is hidden and the form reflows, not greyed).
     ;   Size,
     ;   EPE    -> rebuild T2 and DWI option lists. When size >=15 or EPE
     ;             checked, score 4 is removed from the list -- the v2.1
@@ -80,6 +82,7 @@ ShowPIRADSDialog(text := "") {
     form.SetSubmit(PIRADS_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 ; Filter the T2 and DWI dropdown items based on the v2.1 size + EPE rules.
@@ -139,8 +142,12 @@ _PIRADS_UpdateScoreOptions(frm) {
 
 _PIRADS_UpdateZone(frm) {
     isPZ := InStr(frm.byName["Zone"].ctl.Text, "PZ")
-    frm.SetEnabled("T2",  !isPZ)
-    frm.SetEnabled("DCE", isPZ)
+    ; Hide rather than grey: the PZ score never reads T2 and the TZ
+    ; score never reads DCE (_PIRADS_Score branches), and a hidden
+    ; control reverts to its default so Submit never carries a stale
+    ; value for the unused sequence.
+    frm.SetVisible("T2",  !isPZ)
+    frm.SetVisible("DCE", isPZ)
 }
 
 PIRADS_OnSubmit(v, form := "") {

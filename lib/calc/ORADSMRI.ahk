@@ -69,8 +69,9 @@ ShowORADSMRIDialog(text := "") {
 
     ; Form is organized as a decision tree mirroring how a radiologist
     ; walks through an adnexal MRI: pick a lesion type, then characterize
-    ; the features specific to that type. Each section is gated to the
-    ; relevant type(s) so only the right questions are active at a time.
+    ; the features specific to that type. Progressive disclosure: each
+    ; type-specific section is HIDDEN (form reflows + resizes) until the
+    ; matching lesion type is selected, so the dialog opens minimal.
 
     form.Header("Lesion type")
     form.Dropdown("LType", "Lesion type:"
@@ -115,6 +116,7 @@ ShowORADSMRIDialog(text := "") {
     form.SetSubmit(ORADSMRI_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 _OM_UpdateLType(frm) {
@@ -124,32 +126,35 @@ _OM_UpdateLType(frm) {
     isLipid := InStr(label, "lipid content")
     isSolid := InStr(label, "Lesion with solid")
 
-    frm.SetEnabled("FluidType",    isUni)
-    frm.SetEnabled("SmoothSeptae", isMulti)
+    ; Progressive disclosure: whole type-specific sections are HIDDEN
+    ; (the form reflows and resizes), not greyed. A hidden control
+    ; reverts to its default so the classifier never reads a stale
+    ; answer from a question the user can no longer see.
+    frm.SetSectionVisible("Cystic features (unilocular / multilocular cysts)", isUni || isMulti)
+    frm.SetVisible("FluidType",    isUni)
+    frm.SetVisible("SmoothSeptae", isMulti)
     ; WallEnh is part of the source rules ONLY for unilocular and
     ; multilocular cysts. Lipid and solid lesion scoring don't use
     ; wall enhancement per the O-RADS grid.
-    frm.SetEnabled("WallEnh", isUni || isMulti)
+    frm.SetVisible("WallEnh", isUni || isMulti)
+    ; LargeVolSolid is the lipid-specific equivalent of TIC: it drives
+    ; the lipid-lesion Score 2 vs Score 4 decision per source.
+    frm.SetSectionVisible("Lipid lesion features (dermoid / teratoma)", isLipid)
     ; SolidEnh / T2 / DWI / TIC apply only to "Lesion with solid
     ; tissue". Unilocular and multilocular cysts have no solid
     ; component by O-RADS definition; "Lesion with lipid content"
     ; uses its own LargeVolSolid question instead of TIC/T2/DWI per
-    ; source. T2 / DWI remain available (regardless of SolidEnh)
+    ; source. T2 / DWI remain visible (regardless of SolidEnh)
     ; for the solid type because "dark T2 + dark DWI" is the way to
     ; confirm Score 2 for a non-enhancing solid lesion.
-    frm.SetEnabled("SolidEnh", isSolid)
-    frm.SetEnabled("T2",       isSolid)
-    frm.SetEnabled("DWI",      isSolid)
-    ; LargeVolSolid is the lipid-specific equivalent of TIC: it drives
-    ; the lipid-lesion Score 2 vs Score 4 decision per source.
-    frm.SetEnabled("LargeVolSolid", isLipid)
+    frm.SetSectionVisible("Solid tissue characterization (Lesion with solid tissue)", isSolid)
     _OM_UpdateSolid(frm)   ; cascade -- TIC depends on both lesion type and SolidEnh
 }
 _OM_UpdateSolid(frm) {
     label := frm.byName["LType"].ctl.Text
     isSolid := InStr(label, "Lesion with solid")
     hasSolidEnh := !!frm.GetValue("SolidEnh")
-    frm.SetEnabled("TIC", isSolid && hasSolidEnh)
+    frm.SetVisible("TIC", isSolid && hasSolidEnh)
 }
 
 ORADSMRI_OnSubmit(v, form := "") {

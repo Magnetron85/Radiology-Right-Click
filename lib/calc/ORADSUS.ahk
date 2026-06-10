@@ -100,9 +100,36 @@ ShowORADSUSDialog(text := "") {
     form.Checkbox("Ascites", "Ascites present", asc)
     form.Checkbox("Perit",   "Peritoneal nodularity present", perit)
 
+    ; Progressive disclosure: lesion type gates the descriptor fields.
+    ; Run once during build so the dialog opens showing only the
+    ; questions relevant to the pre-detected lesion type.
+    form.OnChange("LType", _OU_UpdateForm)
+    _OU_UpdateForm(form)
+
     form.SetSubmit(ORADSUS_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
+}
+
+_OU_UpdateForm(frm) {
+    lt := _OU_LType(frm.byName["LType"].ctl.Text)
+    hasLesion := (lt != "none")
+
+    ; Hidden controls reset to their defaults, and _OU_Score provably
+    ; ignores every field below for the lesion types that hide it:
+    ;   - "No lesion" short-circuits to Score 1 (the ascites/peritoneal
+    ;     upgrade only fires for score >=3, so it can never apply).
+    ;   - HasSolid is never consulted on the lt="solid" rule rows.
+    ;   - Shadowing only appears in the lt="solid" smooth CS<=3 rows.
+    ;   - Contour is never consulted on the lt="mixed" rule rows.
+    frm.SetVisible("SizeCm",    hasLesion)
+    frm.SetVisible("Contour",   hasLesion && lt != "mixed")
+    frm.SetVisible("HasSolid",  hasLesion && lt != "solid")
+    frm.SetVisible("Shadowing", lt = "solid")
+    frm.SetVisible("Classic",   hasLesion)
+    frm.SetSectionVisible("Papillary projections and vascularity", hasLesion)
+    frm.SetSectionVisible("Extra-ovarian findings", hasLesion)
 }
 
 ORADSUS_OnSubmit(v, form := "") {

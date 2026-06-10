@@ -37,11 +37,24 @@ ShowIncidentalAdrenalDialog(text := "") {
 
     form := RadsForm("Incidental Adrenal Mass (ACR 2017)", 620)
 
+    ; Progressive-disclosure layout. Mandatory context (modality, size,
+    ; malignancy history) sits at the top; every conditional input appears
+    ; directly below the field that makes it relevant and is HIDDEN (the
+    ; form reflows and resizes), not greyed, until then:
+    ;   * MaligType / Isolated             -> only with known malignancy
+    ;     (the classifier reads them only on the knownMalig branch)
+    ;   * whole "CT attenuation" section   -> only for modality CT
+    ;   * whole "MRI" section (ChemShift)  -> only for modality MRI
+    ;   * StableMonths                     -> only when stability asserted
     form.Header("Patient and modality")
     form.Dropdown("Modality", "Modality:", ["CT", "MRI", "PET"], 1)
     form.Numeric("SizeMm", "Mass size (mm):", sz.mm > 0 ? Round(sz.mm) : 0)
     form.Checkbox("KnownMalig", "Patient has known extra-adrenal malignancy", knownMalig)
     form.Numeric("MaligType", "If yes, primary type (e.g. lung, breast, melanoma):", "")
+    form.Dropdown("Isolated", "If known malignancy: extent of disease:"
+        , ["Unknown"
+        ,  "Isolated adrenal mass (no other mets)"
+        ,  "Widespread metastatic disease"], 1)
 
     form.Header("CT attenuation (HU; leave blank if not measured)")
     form.Numeric("UnenhHU",  "Unenhanced HU:", unenh != "" ? Round(unenh) : "")
@@ -49,11 +62,13 @@ ShowIncidentalAdrenalDialog(text := "") {
     form.Numeric("DelayHU",  "15-minute delayed HU:", delay != "" ? Round(delay) : "")
     form.Note("APW = (E-D)/(E-U)x100, RPW = (E-D)/Ex100. >=60% APW or >=40% RPW = adenoma.")
 
-    form.Header("MRI / morphology")
+    form.Header("MRI")
     form.Dropdown("ChemShift", "Chemical shift (MRI):"
         , ["Unknown / not done"
         ,  "Yes -- signal loss out-of-phase (adenoma)"
         ,  "No -- no signal loss"], 1)
+
+    form.Header("Morphology")
     form.CheckboxRow2("Fat", "Macroscopic fat (myelolipoma)"
                    , "Calcified", "Benign calcified mass", fat, calcified)
     form.CheckboxRow2("Suspicious", "Irregular / necrosis / invasion"
@@ -68,40 +83,46 @@ ShowIncidentalAdrenalDialog(text := "") {
 
     form.Header("Other")
     form.Checkbox("Functional", "Functional symptoms (HTN, hypokalemia, pheo sx, Cushingoid, virilization)", false)
-    form.Dropdown("Isolated", "If known malignancy: extent of disease:"
-        , ["Unknown"
-        ,  "Isolated adrenal mass (no other mets)"
-        ,  "Widespread metastatic disease"], 1)
 
-    form.OnChange("Modality", _Adr_UpdateModality)
-    form.OnChange("KnownMalig", _Adr_UpdateKnownMalig)
-    form.OnChange("Stable", _Adr_UpdateStable)
-    _Adr_UpdateModality(form)
-    _Adr_UpdateKnownMalig(form)
-    _Adr_UpdateStable(form)
+    form.OnChange("Modality",   _Adr_UpdateForm)
+    form.OnChange("KnownMalig", _Adr_UpdateForm)
+    form.OnChange("Stable",     _Adr_UpdateForm)
+    _Adr_UpdateForm(form)
 
     form.SetSubmit(IncidentalAdrenal_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
-_Adr_UpdateModality(frm) {
+_Adr_UpdateForm(frm) {
     mod := frm.byName["Modality"].ctl.Text
     isCT := mod = "CT"
     isMRI := mod = "MRI"
-    frm.SetEnabled("UnenhHU", isCT)
-    frm.SetEnabled("EnhHU",   isCT)
-    frm.SetEnabled("DelayHU", isCT)
-    frm.SetEnabled("ChemShift", isMRI)
-}
-_Adr_UpdateKnownMalig(frm) {
+
+    frm.SetSectionVisible("CT attenuation (HU; leave blank if not measured)", isCT)
+    if !isCT {
+        ; A hidden numeric resets to its recorded default, and _ResetCtl
+        ; falls back to 0 for blank defaults -- but the classifier treats
+        ; 0 HU as a MEASURED value ("" means not measured), so a 0 here
+        ; would spuriously fire the non-enhancing / lipid-rich branches.
+        ; Explicitly blank the HU fields after hiding; the user's typed
+        ; values were already stashed and come back on re-show.
+        for f in ["UnenhHU", "EnhHU", "DelayHU"]
+            frm.byName[f].ctl.Value := ""
+    }
+    frm.SetSectionVisible("MRI", isMRI)
+
+    ; MaligType / Isolated are only read on the known-malignancy branch;
+    ; their hidden defaults (blank type, "Unknown" extent) are inert there.
     km := !!frm.GetValue("KnownMalig")
-    frm.SetEnabled("MaligType", km)
-    frm.SetEnabled("Isolated",  km)
-}
-_Adr_UpdateStable(frm) {
-    txt := frm.byName["Stable"].ctl.Text
-    frm.SetEnabled("StableMonths", InStr(txt, "Stable"))
+    frm.SetVisible("MaligType", km)
+    frm.SetVisible("Isolated",  km)
+
+    ; Months of stability only matter once "Stable for >=1 year" is
+    ; asserted; hidden default 0 never reaches the months>=12 check.
+    stableTxt := frm.byName["Stable"].ctl.Text
+    frm.SetVisible("StableMonths", InStr(stableTxt, "Stable") != 0)
 }
 
 IncidentalAdrenal_OnSubmit(v, form := "") {

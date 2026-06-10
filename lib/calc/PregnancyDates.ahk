@@ -27,8 +27,12 @@ ShowPregnancyDialog(text := "") {
         days  := (m.Count >= 2) ? SafeInt(m[2], 0) : 0
     }
 
+    ; Progressive disclosure: the mandatory Mode dropdown gates which input
+    ; section applies. Only the section matching the selected mode is shown;
+    ; the other is hidden (collapsed), and Pregnancy_OnSubmit reads only the
+    ; fields for the selected mode, so the hidden defaults are never used.
     form := RadsForm("Pregnancy Dates", 480)
-    form.Header("Input mode (use one)")
+    form.Header("Input mode")
     form.Dropdown("Mode", "Mode:"
         , ["From LMP date"
         ,  "From GA (weeks + days)"], lmpYmd != "" ? 1 : (weeks > 0 ? 2 : 1))
@@ -36,12 +40,25 @@ ShowPregnancyDialog(text := "") {
     form.Header("LMP date")
     form.DateField("LMP", "Last menstrual period:", lmpYmd)
 
-    form.Header("Gestational age (if no LMP)")
+    form.Header("Gestational age")
     form.Numeric("Weeks", "Weeks:", weeks)
     form.Numeric("Days",  "Days:",  days)
+
+    form.OnChange("Mode", _PRG_UpdateForm)
+    _PRG_UpdateForm(form)
+
     form.SetSubmit(Pregnancy_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
+}
+
+; Show the input section matching the selected mode; hide (collapse) the
+; other one. The form reflows and the window resizes.
+_PRG_UpdateForm(frm) {
+    isLMP := !!InStr(frm.byName["Mode"].ctl.Text, "LMP")
+    frm.SetSectionVisible("LMP date", isLMP)
+    frm.SetSectionVisible("Gestational age", !isLMP)
 }
 
 Pregnancy_OnSubmit(v, form := "") {
@@ -99,6 +116,7 @@ ShowMenstrualDialog(text := "") {
     form.SetSubmit(Menstrual_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 Menstrual_OnSubmit(v, form := "") {

@@ -25,17 +25,26 @@ ShowIncidentalThyroidDialog(text := "") {
     sizeCm := sz.cm > 0 ? Round(sz.cm, 1) : 0
 
     form := RadsForm("Incidental Thyroid Nodule (ACR 2015)", 520)
+
+    ; Progressive-disclosure layout. Modality is the mandatory context;
+    ; PetAvid only applies to PET so it sits directly under its gate and
+    ; is HIDDEN (not greyed) for other modalities. The "Size criteria"
+    ; section drives the default algorithm path, but every modifier
+    ; checkbox short-circuits _Thy_Classify before size/age are read, so
+    ; the whole section collapses while any modifier is ticked.
     form.Header("Imaging context")
     form.Dropdown("Modality", "Modality:"
         , ["CT", "MRI", "PET (FDG)", "US (extrathyroidal)"], 1)
+    form.Checkbox("PetAvid", "Focal FDG uptake in thyroid (PET only)", false)
+
+    form.Header("Size criteria")
     form.Numeric("SizeCm", "Largest size (cm, 0 if unknown):", sizeCm)
     form.Numeric("Age", "Patient age (years, 0 if unknown):", age)
-    form.Spacer(6)
+
     form.Header("Modifiers")
     form.Checkbox("Susp"
         , "Suspicious features (CT/MRI: abnormal nodes, invasion; US: microcalcs, marked hypo, irregular margins, taller-than-wide)"
         , false)
-    form.Checkbox("PetAvid", "Focal FDG uptake in thyroid (PET only)", false)
     form.Checkbox("ClinRisk"
         , "Clinical risk factors (h/o neck XRT, family hx, MEN2, vocal cord paralysis, rapid growth, pediatric)"
         , false)
@@ -43,23 +52,39 @@ ShowIncidentalThyroidDialog(text := "") {
         , "Limited life expectancy / significant comorbidities"
         , false)
 
-    ; PetAvid is only meaningful when modality = PET.
-    form.OnChange("Modality", _Thy_UpdateModality)
-    _Thy_UpdateModality(form)
-
-    ; ClinRisk and LimitedLE both bypass the size/age algorithm path.
-    form.DisableWhenAnyChecked(
-        ["ClinRisk", "LimitedLE"]
-      , ["SizeCm", "Age"])
+    ; Modality gates PetAvid; the modifier checkboxes (plus PetAvid
+    ; itself) gate the size/age section.
+    form.OnChange("Modality",  _Thy_UpdateForm)
+    form.OnChange("PetAvid",   _Thy_UpdateForm)
+    form.OnChange("Susp",      _Thy_UpdateForm)
+    form.OnChange("ClinRisk",  _Thy_UpdateForm)
+    form.OnChange("LimitedLE", _Thy_UpdateForm)
+    _Thy_UpdateForm(form)
 
     form.SetSubmit(IncidentalThyroid_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
-_Thy_UpdateModality(frm) {
+_Thy_UpdateForm(frm) {
+    ; PetAvid is only meaningful when modality = PET. Hiding it resets
+    ; it to unchecked, so the classifier never sees focal FDG uptake
+    ; asserted for a CT / MRI / US study.
     isPET := InStr(frm.byName["Modality"].ctl.Text, "PET")
-    frm.SetEnabled("PetAvid", isPET)
+    frm.SetVisible("PetAvid", isPET)
+
+    ; Every modifier short-circuits the size/age path in _Thy_Classify
+    ; (ClinRisk -> CLINICAL, PetAvid -> US_FNA / NO_WORKUP_LE,
+    ; Susp -> US / NO_WORKUP_LE, LimitedLE -> NO_WORKUP_LE), so the size
+    ; criteria are irrelevant while any of them is set. Read PetAvid
+    ; AFTER the visibility pass above -- a just-hidden control has
+    ; already been reset to its unchecked default.
+    bypass := (frm.GetValue("Susp") = 1)
+           || (frm.GetValue("PetAvid") = 1)
+           || (frm.GetValue("ClinRisk") = 1)
+           || (frm.GetValue("LimitedLE") = 1)
+    frm.SetSectionVisible("Size criteria", !bypass)
 }
 
 IncidentalThyroid_OnSubmit(v, form := "") {

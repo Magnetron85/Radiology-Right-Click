@@ -34,6 +34,20 @@ ShowGBPolypDialog(text := "") {
 
     form := RadsForm("Gallbladder Polyp (SRU 2022)", 540)
 
+    ; Progressive-disclosure layout. The exclusion gate comes FIRST: when
+    ; any exclusion is ticked the SRU algorithm does not apply (the
+    ; classifier short-circuits on psc / susp / poor before reading any
+    ; other input), so every other section is HIDDEN -- the form collapses
+    ; to just the exclusions. Hidden inputs revert to their defaults, so
+    ; Gui.Submit() never returns a stale answer and the "Selected inputs:"
+    ; echo stays honest.
+    form.Header("Exclusions (algorithm does NOT apply)")
+    form.Checkbox("PSC", "Primary sclerosing cholangitis", hasPSC)
+    form.Checkbox("Susp"
+        , "Suspicious features: invasion, liver masses, biliary obstruction, pathologic nodes"
+        , false)
+    form.Checkbox("PoorViz", "Technically inadequate (poor visualization)", poorViz)
+
     form.Header("Polyp")
     form.Numeric("SizeMm", "Polyp size (mm):", sz.mm > 0 ? Round(sz.mm) : 0)
     form.Dropdown("Morph", "Morphology:"
@@ -52,30 +66,29 @@ ShowGBPolypDialog(text := "") {
         , "High-risk geographic / genetic background (North/South American Indigenous, North Indian, Japanese, or Hispanic American populations -- elevated GBC incidence)"
         , false)
 
-    form.Header("Exclusions (algorithm does NOT apply)")
-    form.Checkbox("PSC", "Primary sclerosing cholangitis", hasPSC)
-    form.Checkbox("Susp"
-        , "Suspicious features: invasion, liver masses, biliary obstruction, pathologic nodes"
-        , false)
-    form.Checkbox("PoorViz", "Technically inadequate (poor visualization)", poorViz)
-
     form.Header("Prior comparison (optional)")
     form.Numeric("PriorMm",     "Prior size (mm, 0 if no prior):", 0)
     form.Numeric("PriorMonths", "Months since prior (0 if no prior):", 0)
 
-    ; When any exclusion is ticked the SRU algorithm does not apply, so the
-    ; rest of the inputs are irrelevant. Disable + reset them on click. The
-    ; framework also clears their values so Gui.Submit() returns defaults --
-    ; the classifier short-circuits on the exclusion anyway, but this keeps
-    ; the "Selected inputs:" echo honest.
-    form.DisableWhenAnyChecked(
-        ["PSC", "Susp", "PoorViz"]
-      , ["SizeMm", "Morph", "WallThick", "HighRiskEth"
-       , "PriorMm", "PriorMonths"])
+    form.OnChange("PSC",     _GBP_UpdateForm)
+    form.OnChange("Susp",    _GBP_UpdateForm)
+    form.OnChange("PoorViz", _GBP_UpdateForm)
+    _GBP_UpdateForm(form)
 
     form.SetSubmit(GBPolyp_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
+}
+
+_GBP_UpdateForm(frm) {
+    excluded := !!frm.GetValue("PSC") || !!frm.GetValue("Susp")
+             || !!frm.GetValue("PoorViz")
+    applies := !excluded
+    frm.SetSectionVisible("Polyp", applies)
+    frm.SetSectionVisible("Adjacent wall", applies)
+    frm.SetSectionVisible("Patient factors", applies)
+    frm.SetSectionVisible("Prior comparison (optional)", applies)
 }
 
 GBPolyp_OnSubmit(v, form := "") {

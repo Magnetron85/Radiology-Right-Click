@@ -27,6 +27,7 @@ ShowLiverIronDialog(text := "") {
     form.SetSubmit(LiverIron_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 LiverIron_OnSubmit(v, form := "") {
@@ -77,7 +78,11 @@ LiverIron_OnSubmit(v, form := "") {
                                 . "Fibrosis and Fat Evaluation with US: A Practical Guide for "
                                 . "Radiologists. Radiographics. 2023 Jun;43(6):e220181.",
                            url:  "https://pubs.rsna.org/doi/10.1148/rg.220181" }],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        ; Parenthetical append: "...R2* 312 Hz (estimated LIC 8.0 mg Fe/g
+        ; dry liver)." reads naturally inside the findings sentence.
+        paste:          (v.R2 != "") ? "estimated LIC " Round(iron, 1) " mg Fe/g dry liver" : "",
+        pasteMode:      ""
     })
 }
 

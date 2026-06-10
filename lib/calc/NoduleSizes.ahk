@@ -27,6 +27,7 @@ ShowCompareSizesDialog(text := "") {
     form.SetSubmit(CompareSizes_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 CompareSizes_OnSubmit(v, form := "") {
@@ -63,13 +64,25 @@ CompareSizes_OnSubmit(v, form := "") {
         impression := body
     }
 
+    ; Short parenthetical fragment: lowercase start, no trailing period.
+    pasteFrag := ""
+    if (longestChange != "") {
+        pasteFrag := "interval change in longest dimension " longestChange
+        if (volChange != "")
+            pasteFrag .= ", volume " volChange
+        if (doublingDays != "")
+            pasteFrag .= ", doubling time " doublingDays
+    }
+
     return MakeResult({
         classification: "Size comparison",
         impression:     impression,
         recommendation: "",
         methodology:    body,
         citations:      [],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          pasteFrag,
+        pasteMode:      ""
     })
 }
 
@@ -86,10 +99,13 @@ CompareSizes_Compute(input) {
         currentDate  := m[1]
         previousDate := m[4] != "" ? m[4] : m[7]
     } else if RegExMatch(input, p2, &m) {
+        ; p2 groups: 1=prev date, 2=prev meas, 3=prev unit, 4=prev "on" date,
+        ; 5=cur date, 6=cur meas, 7=cur unit. The old indices here read the
+        ; current DATE as the measurement and the current UNIT as its date.
         previous := m[2] " " m[3]
-        current  := m[5] " " m[6]
-        previousDate := m[1]
-        currentDate  := m[4] != "" ? m[4] : m[7]
+        current  := m[6] " " m[7]
+        previousDate := m[1] != "" ? m[1] : m[4]
+        currentDate  := m[5]
     } else {
         return "Invalid input format. Please provide both current and previous measurements."
     }

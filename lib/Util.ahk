@@ -28,9 +28,36 @@ GetSelectedText(timeout := 0.4) {
     ; and other dictation systems). AHK v2 defaults to SendInput, which
     ; is faster but bypasses the standard Windows message queue --
     ; dictation hooks may not see it, leaving the clipboard empty.
+    ;
+    ; Give the Ctrl+C a real press duration (20 ms held) -- dictation
+    ; hooks sample key state and can miss a zero-duration synthetic
+    ; press. SetKeyDelay only affects the current thread.
+    SetKeyDelay 10, 20
     SendEvent "^c"
 
+    stage := "ctrl+c"
     waited := ClipWait(timeout, 1)
+    if !waited {
+        ; Fallback 1: WM_COPY posted straight at the focused control. No
+        ; keyboard involved, so keyboard hooks can't eat it; standard
+        ; Edit / RichEdit-derived controls honor it.
+        try {
+            focused := ControlGetFocus("A")
+            if (focused != "") {
+                SendMessage(0x0301, 0, 0, focused, "A")   ; WM_COPY
+                stage := "wm_copy"
+                waited := ClipWait(0.2, 1)
+            }
+        }
+    }
+    if !waited {
+        ; Fallback 2: one slower retry. PowerScribe under dictation load
+        ; can miss the first Ctrl+C entirely.
+        SetKeyDelay 30, 40
+        SendEvent "^c"
+        stage := "retry"
+        waited := ClipWait(Max(timeout, 0.6), 1)
+    }
     elapsed := A_TickCount - callT0
     if !waited {
         A_Clipboard := saved
@@ -40,9 +67,30 @@ GetSelectedText(timeout := 0.4) {
     }
     text := A_Clipboard
     A_Clipboard := saved
+    text := NormalizeReportWhitespace(text)
     Debug.LogHex("capture"
-        , Format("elapsed={}ms clipWait=ok len={}", elapsed, StrLen(text))
+        , Format("elapsed={}ms clipWait=ok stage={} len={}", elapsed, stage, StrLen(text))
         , text)
+    return text
+}
+
+; PowerScribe and other rich-text editors silently insert non-breaking and
+; other exotic Unicode spaces -- U+00A0 (NBSP) is the usual culprit -- into
+; measurement and label context, e.g. "12<NBSP>mm". A regex \s matches NONE of
+; these, so any size/label parser written with \s silently misses the value;
+; that is the recurring "size not detected" bug (LI-RADS etc. only worked
+; because they parse via TextScan, which uses \h). Folding these code points
+; down to a plain space ONCE, at the single capture point, makes every
+; downstream parser -- \s or \h -- see clean ASCII whitespace, so individual
+; calculators no longer have to remember to use \h.
+NormalizeReportWhitespace(text) {
+    if (text = "")
+        return text
+    ; Non-breaking / exotic SPACE characters -> a regular space.
+    text := RegExReplace(text, "[\x{00A0}\x{2000}-\x{200A}\x{202F}\x{205F}\x{3000}]", " ")
+    ; Zero-width characters -> removed. These must NOT become a space, or they
+    ; would split words ("wash<ZWSP>out" -> "wash out") and break term matches.
+    text := RegExReplace(text, "[\x{200B}\x{200C}\x{200D}\x{2060}\x{FEFF}]", "")
     return text
 }
 

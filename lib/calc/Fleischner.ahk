@@ -53,20 +53,24 @@ ShowFleischnerDialog(text := "") {
         location := m[0]
 
     ; --- build the form ---
+    ; Mandatory inputs (multiplicity / composition / size -- the three axes
+    ; of the Fleischner 2017 table) sit first under a single header; the
+    ; refinement fields follow, with location explicitly marked optional.
+    ; No progressive-disclosure gates: every field below feeds the
+    ; classifier in all multiplicity x composition combinations (morphology
+    ; and risk also drive the high-risk note / branch collapsing for
+    ; subsolid and calcified nodules), so there is no state in which a
+    ; hidden default would be a true not-applicable.
     form := RadsForm("Fleischner 2017", 580)
 
-    form.Header("Number of nodules")
+    form.Header("Nodule")
     form.Dropdown("Mult", "Multiplicity:"
         , ["Solitary (single nodule)"
         ,  "Multiple nodules"], multIdx)
-
-    form.Header("Composition")
     form.Dropdown("Comp", "Composition:"
         , ["Solid"
         ,  "Ground-glass"
         ,  "Part-solid"], compIdx)
-
-    form.Header("Size of dominant nodule")
     form.Numeric("SizeMm", "Largest dimension (mm):", sz.mm > 0 ? Round(sz.mm, 1) : "")
 
     form.Header("Morphology and additional features")
@@ -90,6 +94,7 @@ ShowFleischnerDialog(text := "") {
     form.SetSubmit(Fleischner_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 Fleischner_OnSubmit(v, form := "") {
@@ -188,10 +193,11 @@ Fleischner_OnSubmit(v, form := "") {
             highRec := _FLE_CleanWhitespace(
                 Trim(SubStr(recBlock, hPos + StrLen("For high-risk patients:"))
                    , " `t`r`n"))
+            ; Prose conditional, not "low-risk:"/"high-risk:" labels --
+            ; label-style colons read as headers when pasted into a report.
             impression := sizeStr
-                       . ". Fleischner 2017 follow-up stratified by patient risk -- "
-                       . "low-risk: " RTrim(lowRec, ".")
-                       . "; high-risk: " RTrim(highRec, ".") "."
+                       . ". Per Fleischner 2017: if low risk, " RTrim(lowRec, ".")
+                       . "; if high risk, " RTrim(highRec, ".") "."
         } else {
             recText := _FLE_CleanWhitespace(recBlock)
             if InStr(recText, "calcified nodules do not") {

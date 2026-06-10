@@ -46,7 +46,8 @@ ShowPSADensityDialog(text := "") {
     form.Numeric("PSA", "PSA (ng/mL):", psa)
     form.Header("Volume (provide one)")
     form.Numeric("Vol", "Prostate volume (cc, blank to compute):", vol)
-    form.Note("Or enter three dimensions; bullet volume used below 55 cc, ellipsoid above.")
+    form.Header("Dimensions (used when volume is blank)")
+    form.Note("Bullet volume used below 55 cc, ellipsoid above.")
     form.Numeric("A", "A:", a)
     form.Numeric("B", "B:", b)
     form.Numeric("C", "C:", c)
@@ -54,20 +55,22 @@ ShowPSADensityDialog(text := "") {
 
     ; The two volume methods are mutually exclusive: either the user supplies
     ; a measured volume, OR the calc derives one from the three dimensions.
-    ; Watch the Vol field and grey out the dimensions when it's populated.
+    ; Progressive disclosure: when Vol is populated the entire Dimensions
+    ; section disappears (the form reflows and shrinks); clearing Vol brings
+    ; it back with any previously typed dimensions restored.
     form.OnChange("Vol", _PSAD_UpdateVol)
     _PSAD_UpdateVol(form)
 
     form.SetSubmit(PSADensity_OnSubmit)
     form.AddButtons()
     form.Show()
+    return form   ; for GUI smoke tests
 }
 
 _PSAD_UpdateVol(frm) {
     v := frm.GetValue("Vol")
     hasVol := (v != "" && v != 0)
-    for f in ["A", "B", "C", "Unit"]
-        frm.SetEnabled(f, !hasVol)
+    frm.SetSectionVisible("Dimensions (used when volume is blank)", !hasVol)
 }
 
 PSADensity_OnSubmit(v, form := "") {
@@ -128,7 +131,9 @@ PSADensity_OnSubmit(v, form := "") {
         recommendation: "",
         methodology:    method,
         citations:      [],
-        echo:           g_LastSelectedText
+        echo:           g_LastSelectedText,
+        paste:          densVal != "" ? "PSA density " densVal " ng/mL/cc" : "",
+        pasteMode:      ""   ; paren after a single-line selection; newline otherwise
     })
 }
 
@@ -173,7 +178,10 @@ CalcPSADensity(input) {
     if (prostateVolume = "" || (prostateVolume + 0) = 0)
         return "Could not determine prostate volume.`nExample:`nPSA: 5.6 ng/mL`nSize: 3.5 x 5.4 x 2.5 cm"
 
-    density := Round(psaLevel / (prostateVolume + 0), 1)
+    ; Two decimals, NOT one: the clinically used PSAD cutoff is 0.15
+    ; ng/mL/cc -- rounding to one decimal (0.1 / 0.2) destroys the answer
+    ; right at the decision boundary.
+    density := Round(psaLevel / (prostateVolume + 0), 2)
     units := Prefs.Get("display","units",true) ? " ng/mL/cc" : ""
 
     if !volNotGiven {
