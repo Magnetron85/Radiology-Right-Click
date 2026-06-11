@@ -7,7 +7,13 @@
 
 ; --- text / clipboard --------------------------------------------------------
 
-GetSelectedText(timeout := 0.4) {
+; timeout is the FIRST Ctrl+C wait. Kept short (0.3 s) so the common case of
+; opening the menu with NO selection -- where every copy attempt necessarily
+; comes back empty -- returns quickly instead of stalling the menu through a
+; long fallback chain. A real selection satisfies ClipWait the instant the
+; app updates the clipboard (typically well under the timeout), so shortening
+; this does not slow successful captures.
+GetSelectedText(timeout := 0.3) {
     callT0 := A_TickCount
     saved := ClipboardAll()
     A_Clipboard := ""
@@ -46,17 +52,19 @@ GetSelectedText(timeout := 0.4) {
             if (focused != "") {
                 SendMessage(0x0301, 0, 0, focused, "A")   ; WM_COPY
                 stage := "wm_copy"
-                waited := ClipWait(0.2, 1)
+                waited := ClipWait(0.15, 1)
             }
         }
     }
     if !waited {
-        ; Fallback 2: one slower retry. PowerScribe under dictation load
-        ; can miss the first Ctrl+C entirely.
+        ; Fallback 2: one more keyboard retry, for apps whose focused
+        ; control doesn't honor WM_COPY. Kept short -- the WM_COPY path
+        ; above already covers the hook-ate-the-keystroke case, so this is
+        ; belt-and-suspenders, not the primary reliability mechanism.
         SetKeyDelay 30, 40
         SendEvent "^c"
         stage := "retry"
-        waited := ClipWait(Max(timeout, 0.6), 1)
+        waited := ClipWait(0.2, 1)
     }
     elapsed := A_TickCount - callT0
     if !waited {

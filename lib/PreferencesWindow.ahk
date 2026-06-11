@@ -10,7 +10,10 @@
 #Include Modern.ahk
 #Include Util.ahk
 
-global CALC_COL1 := [
+; Single ordered list of all toggleable calculators (key, menu label). The
+; preferences grid lays these out column-major; _SaveHandler iterates the
+; same list, so adding a calculator here is the only edit needed.
+global CALC_ALL := [
     ["ellipsoidVolume",       "Ellipsoid Volume"],
     ["bulletVolume",          "Bullet Volume"],
     ["psaDensity",            "PSA Density"],
@@ -19,19 +22,20 @@ global CALC_COL1 := [
     ["adrenalWashout",        "Adrenal Washout"],
     ["thymusChemicalShift",   "Thymus Chemical Shift"],
     ["hepaticSteatosis",      "Hepatic Steatosis"],
-    ["mriLiverIron",          "MRI Liver Iron Content"],
+    ["mriLiverIron",          "MRI Liver Iron"],
     ["statistics",            "Statistics"],
     ["numberRange",           "Number Range"],
-    ["calciumScorePercentile","Calcium Score Percentile"],
-    ["contrastPremedication", "Contrast Premedication"],
-    ["fleischnerCriteria",    "Fleischner Criteria"]
-]
-global CALC_COL2 := [
-    ["nascetCalculator",      "NASCET"],
-    ["bosniak",               "Bosniak (renal cyst)"],
+    ["calciumScorePercentile","Calcium Score Pctile"],
+    ["contrastPremedication", "Contrast Premed"],
+    ["fleischnerCriteria",    "Fleischner Criteria"],
+    ["rvlvRatio",             "RV/LV Ratio (PE)"],
+    ["nascetCalculator",      "NASCET (carotid)"],
+    ["ichVolume",             "ICH Volume (ABC/2)"],
+    ["followUpDate",          "Follow-up Date"],
+    ["bosniak",               "Bosniak"],
     ["gbPolyp",               "Gallbladder Polyp"],
-    ["incidentalAdrenal",     "Incidental Adrenal Mass"],
-    ["incidentalThyroid",     "Incidental Thyroid Nodule"],
+    ["incidentalAdrenal",     "Incidental Adrenal"],
+    ["incidentalThyroid",     "Incidental Thyroid"],
     ["kyotoIpmn",             "Kyoto IPMN"],
     ["lirads",                "LI-RADS (CT/MRI)"],
     ["lungRads",              "Lung-RADS"],
@@ -42,139 +46,184 @@ global CALC_COL2 := [
     ["usLirads",              "US LI-RADS"]
 ]
 
+; Window geometry. A wider window (740) lets every label render on one line
+; -- the old 580 width forced long captions ("Show malignancy risk % ...")
+; to wrap to two lines, and the fixed 24 px rows then overlapped the row
+; below. Layout is driven by a running `y` that is advanced past each row's
+; MEASURED bottom (see _PrefAdvance), so even a wrapped label can never
+; overlap the next section.
 ShowPreferencesWindow() {
     dark    := Prefs.Get("display", "darkMode", false)
     palette := ModernPalette(dark)
 
+    WIN_W := 740
+    marginX := 20
+    leftX   := marginX
+    contentW := WIN_W - marginX*2
+
     MouseGetPos(&mx, &my)
     work := GetWorkAreaAt(mx, my)
-    desiredW := 580
-    desiredH := 700   ; taller after 13 new RADS calculator toggles in col 2
-    fit := FitWindow(desiredW, desiredH, mx + 12, my + 12, work, 24)
 
-    g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "RightClick Preferences")
-    g.MarginX := 18
-    g.MarginY := 16
+    g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox +DPIScale", "RightClick Preferences")
+    g.MarginX := marginX
+    g.MarginY := 14
     g.BackColor := palette["bg"]
     g.SetFont("s10 c" palette["fg"], ModernFont())
 
-    col1X := 24
-    col2X := 296
-    cbW   := 260
-    y     := 16
+    ; Shared mutable cursor so the helpers can advance a single `y`.
+    st := { g: g, pal: palette, y: 16, leftX: leftX, w: contentW }
 
-    ; --- DISPLAY
-    _AddHeader(g, palette, col1X, y, "Display")
-    y += 26
-    cbDark := g.Add("Checkbox"
-        , "x" col1X " y" y " w" cbW " vDarkMode c" palette["fg"]
-        , "Dark mode")
-    cbDark.Value := dark ? 1 : 0
-    cbCit  := g.Add("Checkbox"
-        , "x" col2X " y" y " w" cbW " vShowCitations c" palette["fg"]
-        , "Show citations in output")
-    cbCit.Value := Prefs.Get("display", "showCitations", true) ? 1 : 0
-    y += 24
-    cbArt := g.Add("Checkbox"
-        , "x" col1X " y" y " w" cbW " vShowArterialAge c" palette["fg"]
-        , "Show arterial age (calcium score)")
-    cbArt.Value := Prefs.Get("display", "showArterialAge", true) ? 1 : 0
-    cbRisk := g.Add("Checkbox"
-        , "x" col2X " y" y " w" cbW " vShowMalignancyRisk c" palette["fg"]
-        , "Show malignancy risk % (when published)")
-    cbRisk.Value := Prefs.Get("display", "showMalignancyRisk", true) ? 1 : 0
-    y += 24
-    cbMethod := g.Add("Checkbox"
-        , "x" col1X " y" y " w" cbW " vShowMethodology c" palette["fg"]
-        , "Show methodology in result")
-    cbMethod.Value := Prefs.Get("display", "showMethodology", true) ? 1 : 0
-    y += 32
+    ; ---- DISPLAY (two roomy columns, no wrapping) ----
+    _PrefSection(st, "Display")
+    dColW := (contentW - 24) // 2          ; ~338 each
+    dCol2 := leftX + dColW + 24
+    cbDark := _PrefCheck(g, palette, leftX, st.y, dColW, "DarkMode", "Dark mode", dark)
+    cbCit  := _PrefCheck(g, palette, dCol2, st.y, dColW, "ShowCitations"
+                       , "Show citations in output", Prefs.Get("display","showCitations",true))
+    _PrefAdvance(st, [cbDark, cbCit])
+    cbArt  := _PrefCheck(g, palette, leftX, st.y, dColW, "ShowArterialAge"
+                       , "Show arterial age", Prefs.Get("display","showArterialAge",true))
+    cbRisk := _PrefCheck(g, palette, dCol2, st.y, dColW, "ShowMalignancyRisk"
+                       , "Show malignancy risk %", Prefs.Get("display","showMalignancyRisk",true))
+    _PrefAdvance(st, [cbArt, cbRisk])
+    cbMethod := _PrefCheck(g, palette, leftX, st.y, dColW, "ShowMethodology"
+                         , "Show methodology in result", Prefs.Get("display","showMethodology",true))
+    cbWidget := _PrefCheck(g, palette, dCol2, st.y, dColW, "LauncherWidget"
+                         , "Show floating launcher widget", Prefs.Get("widget","enabled",false))
+    _PrefAdvance(st, [cbMethod, cbWidget])
 
-    ; --- CALCULATORS (two-column grid)
-    _AddHeader(g, palette, col1X, y, "Calculators (show in menu)")
-    y += 26
-    gridStartY := y
-    for i, entry in CALC_COL1 {
-        cb := g.Add("Checkbox"
-            , "x" col1X " y" (gridStartY + (i-1)*24) " w" cbW
-              . " vCalc_" entry[1] " c" palette["fg"]
-            , entry[2])
-        cb.Value := Prefs.Get("calculations", entry[1], true) ? 1 : 0
-    }
-    for i, entry in CALC_COL2 {
-        cb := g.Add("Checkbox"
-            , "x" col2X " y" (gridStartY + (i-1)*24) " w" cbW
-              . " vCalc_" entry[1] " c" palette["fg"]
-            , entry[2])
-        cb.Value := Prefs.Get("calculations", entry[1], true) ? 1 : 0
-    }
-    rows := Max(CALC_COL1.Length, CALC_COL2.Length)
-    y := gridStartY + rows * 24 + 12
-
-    ; --- MENU SORT (left)
-    _AddHeader(g, palette, col1X, y, "Menu sorting")
-    _AddHeader(g, palette, col2X, y, "Right-click modifier")
-    y += 26
+    ; ---- MENU + ACTIVATION (label above each dropdown) ----
+    _PrefSection(st, "Menu and activation")
+    cbSmart := _PrefCheck(g, palette, leftX, st.y, contentW, "SmartMatch"
+        , "Suggest the best-matching calculator(s) from the highlighted text"
+        , Prefs.Get("menu","smartMatch",true))
+    _PrefAdvance(st, [cbSmart])
+    tSort := g.Add("Text", "x" leftX " y" st.y " w" dColW " c" palette["fg"], "Menu sorting")
+    tMod  := g.Add("Text", "x" dCol2 " y" st.y " w" dColW " c" palette["fg"], "Right-click activation")
+    _PrefAdvance(st, [tSort, tMod], 2)
 
     sortChoices := ["grouped","alphabetical","frequency","none"]
-    sortVal := Prefs.Get("menu", "sortingMethod", "grouped")
-    sortIdx := 1
-    for i, v in sortChoices {
-        if (v = sortVal)
-            sortIdx := i
-    }
-    g.Add("DropDownList", "x" col1X " y" y " w200 vSortChoice Choose" sortIdx
+    sortIdx := _PrefIndexOf(sortChoices, Prefs.Get("menu","sortingMethod","grouped"), 1)
+    ddSort := g.Add("DropDownList"
+        , "x" leftX " y" st.y " w" dColW " vSortChoice Choose" sortIdx
+          . " Background" palette["bgAlt"] " c" palette["fg"]
         , sortChoices)
-
-    ; --- ACTIVATION MODIFIER (right)
     modLabels := ["none (plain right-click)","Ctrl + right-click"
                 , "Alt + right-click","Shift + right-click"]
     modKeys   := ["none","ctrl","alt","shift"]
-    modVal := Prefs.Get("activation", "modifier", "none")
-    modIdx := 1
-    for i, k in modKeys {
-        if (k = modVal)
-            modIdx := i
-    }
-    g.Add("DropDownList", "x" col2X " y" y " w240 vModifierChoice Choose" modIdx
+    modIdx := _PrefIndexOf(modKeys, Prefs.Get("activation","modifier","none"), 1)
+    ddMod := g.Add("DropDownList"
+        , "x" dCol2 " y" st.y " w" dColW " vModifierChoice Choose" modIdx
+          . " Background" palette["bgAlt"] " c" palette["fg"]
         , modLabels)
-    y += 48
+    _PrefAdvance(st, [ddSort, ddMod])
 
-    ; --- BUTTONS (bottom row)
-    btnRefs := g.Add("Button"
-        , "x" col1X " y" y " w110 h32 +Background" palette["btnBg"] " c" palette["btnFg"]
-        , "References...")
+    ; ---- CALCULATORS (compact 3-column grid) ----
+    _PrefSection(st, "Calculators shown in the menu")
+    cCols := 3
+    cColW := (contentW - (cCols-1)*16) // cCols    ; ~228 each
+    cRows := Ceil(CALC_ALL.Length / cCols)
+    gridTop := st.y
+    rowH := 26
+    lastRowCtls := []
+    for i, entry in CALC_ALL {
+        ci := Mod(i - 1, cCols)              ; 0-based column
+        ri := (i - 1) // cCols               ; 0-based row
+        cx := leftX + ci * (cColW + 16)
+        cy := gridTop + ri * rowH
+        cb := _PrefCheck(g, palette, cx, cy, cColW, "Calc_" entry[1], entry[2]
+                       , Prefs.Get("calculations", entry[1], true))
+        if (ri = cRows - 1)
+            lastRowCtls.Push(cb)
+    }
+    st.y := gridTop + cRows * rowH + 6
+    _PrefRule(st)
+
+    ; ---- BUTTONS (left group + right group) ----
+    btnY := st.y + 6
+    btnH := 32
+    btnRefs := _PrefButton(g, palette, leftX, btnY, 120, btnH, "References...")
     btnRefs.OnEvent("Click", _RefsHandler)
-
-    btnApps := g.Add("Button"
-        , "x" (col1X + 120) " y" y " w110 h32 +Background" palette["btnBg"] " c" palette["btnFg"]
-        , "Target Apps...")
+    btnApps := _PrefButton(g, palette, leftX + 130, btnY, 120, btnH, "Target Apps...")
     btnApps.OnEvent("Click", _AppsHandler)
-
-    btnReset := g.Add("Button"
-        , "x" (col1X + 240) " y" y " w120 h32 +Background" palette["btnBg"] " c" palette["btnFg"]
-        , "Restore Defaults")
+    btnReset := _PrefButton(g, palette, leftX + 260, btnY, 130, btnH, "Restore Defaults")
     btnReset.OnEvent("Click", _ResetHandler.Bind(g))
 
+    saveX := leftX + contentW - 94
+    cancelX := saveX - 100
+    btnCancel := _PrefButton(g, palette, cancelX, btnY, 92, btnH, "Cancel")
+    btnCancel.OnEvent("Click", _CloseHandler.Bind(g))
     btnSave := g.Add("Button"
-        , "Default x" (col2X + 166) " y" y " w90 h32 +Background"
-          . palette["btnBg"] " c" palette["btnFg"]
+        , "Default x" saveX " y" btnY " w94 h" btnH
+          . " +Background" palette["btnBg"] " c" palette["btnFg"]
         , "Save")
     btnSave.OnEvent("Click", _SaveHandler.Bind(g))
 
     g.OnEvent("Close",  _CloseHandler.Bind(g))
     g.OnEvent("Escape", _CloseHandler.Bind(g))
 
+    winH := btnY + btnH + 16
     ApplyModernChrome(g, dark)
-    finalH := Min(y + 60, fit.h)  ; cap at fitted height
-    g.Show("x" fit.x " y" fit.y " w" fit.w " h" finalH)
+    fit := FitWindow(WIN_W, winH, mx + 12, my + 12, work, 24)
+    g.Show("x" fit.x " y" fit.y " w" fit.w " h" fit.h)
     WinActivate("ahk_id " g.Hwnd)
 }
 
-_AddHeader(g, palette, x, y, label) {
-    g.SetFont("s10 Bold c" palette["fg"])
-    g.Add("Text", "x" x " y" y " w400", label)
-    g.SetFont("s10 Norm c" palette["fg"])
+; ---- layout helpers --------------------------------------------------------
+
+; Section header: accent caption over a hairline rule, then advance the
+; cursor below the rule. Adds a little gap before the section (except first).
+_PrefSection(st, label) {
+    if (st.y > 20)
+        st.y += 14
+    st.g.SetFont("s10 Bold c" st.pal["accent"])
+    t := st.g.Add("Text", "x" st.leftX " y" st.y " w" st.w " +Wrap", label)
+    st.g.SetFont("s10 Norm c" st.pal["fg"])
+    t.GetPos(, &ty, , &th)
+    st.g.Add("Text", "x" st.leftX " y" (ty + th + 3) " w" st.w
+        . " h1 +Background" st.pal["border"])
+    st.y := ty + th + 3 + 8
+}
+
+_PrefRule(st) {
+    st.g.Add("Text", "x" st.leftX " y" st.y " w" st.w
+        . " h1 +Background" st.pal["border"])
+    st.y += 1
+}
+
+_PrefCheck(g, pal, x, y, w, vname, label, on) {
+    cb := g.Add("Checkbox"
+        , "x" x " y" y " w" w " v" vname " c" pal["fg"]
+        , label)
+    cb.Value := on ? 1 : 0
+    return cb
+}
+
+_PrefButton(g, pal, x, y, w, h, label) {
+    return g.Add("Button"
+        , "x" x " y" y " w" w " h" h " +Background" pal["btnBg"] " c" pal["btnFg"]
+        , label)
+}
+
+; Advance st.y past the measured bottom of the row's controls + a gap, so a
+; control that wrapped to two lines pushes the next row down instead of
+; overlapping it.
+_PrefAdvance(st, ctls, gap := 8) {
+    maxBottom := st.y
+    for c in ctls {
+        c.GetPos(, &cy, , &ch)
+        if (cy + ch > maxBottom)
+            maxBottom := cy + ch
+    }
+    st.y := maxBottom + gap
+}
+
+_PrefIndexOf(arr, val, default) {
+    for i, v in arr {
+        if (v = val)
+            return i
+    }
+    return default
 }
 
 _RefsHandler(*) {
@@ -198,12 +247,11 @@ _SaveHandler(g, *) {
     Prefs.Set("display", "showMalignancyRisk", !!saved.ShowMalignancyRisk)
     Prefs.Set("display", "showMethodology",    !!saved.ShowMethodology)
 
-    for entry in CALC_COL1
-        Prefs.Set("calculations", entry[1], !!saved.%"Calc_" entry[1]%)
-    for entry in CALC_COL2
+    for entry in CALC_ALL
         Prefs.Set("calculations", entry[1], !!saved.%"Calc_" entry[1]%)
 
     Prefs.Set("menu", "sortingMethod", saved.SortChoice)
+    Prefs.Set("menu", "smartMatch", !!saved.SmartMatch)
 
     modLabels := ["none (plain right-click)","Ctrl + right-click"
                 , "Alt + right-click","Shift + right-click"]
@@ -215,9 +263,12 @@ _SaveHandler(g, *) {
         }
     }
 
+    Prefs.Set("widget", "enabled", !!saved.LauncherWidget)
+
     Prefs.Save()
     ApplyActivationHotkey()
     SetAppDarkMode(Prefs.Get("display", "darkMode", false))
+    Launcher.Apply()   ; create/destroy the launcher widget to match the toggle
     g.Destroy()
 }
 

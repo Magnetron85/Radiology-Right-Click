@@ -52,6 +52,9 @@ if FileExist(A_ScriptDir "\RightClick.ico")
 #Include lib\calc\NoduleSizes.ahk
 #Include lib\calc\ContrastPremed.ahk
 #Include lib\calc\Fleischner.ahk
+#Include lib\calc\ICHVolume.ahk
+#Include lib\calc\FollowUpDate.ahk
+#Include lib\calc\RVLV.ahk
 
 ; ---- form-based RADS calculators (v2.1)
 #Include lib\calc\Bosniak.ahk
@@ -68,12 +71,15 @@ if FileExist(A_ScriptDir "\RightClick.ico")
 #Include lib\calc\USLIRADS.ahk
 
 ; ---- shell
+#Include lib\Dispatch.ahk
 #Include lib\References.ahk
 #Include lib\PreferencesWindow.ahk
 #Include lib\Menu.ahk
+#Include lib\Widget.ahk
 
 Prefs.Load()
 SetAppDarkMode(Prefs.Get("display", "darkMode", false))
+Launcher.Apply()   ; show the persistent launcher widget if enabled
 OnExit((*) => Prefs.Flush())   ; persist any pending frequency increments
 
 ; ------------------------------------------------------------

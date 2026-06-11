@@ -1,5 +1,35 @@
 # v2.1 -> v2.1.1 changes
 
+## Smart match: suggested calculators from the highlighted text
+
+- The context menu now **pins a "Suggested" section at the top** with the 1-3 calculators that best match the highlighted text, each tagged "strong" or "possible". The radiologist highlights a finding, right-clicks, and the relevant tool is right there -- but the tool **never auto-runs**: the best match is shown as the bold default and a single click launches it (per design, nothing executes without confirmation). When several tools plausibly apply (e.g. "adrenal" -> Adrenal Washout + Incidental Adrenal; "thyroid nodule" -> TI-RADS + Incidental Thyroid), they all surface so the user picks.
+- Scoring (`lib/Dispatch.ahk`) is transparent and regex-based: each calculator declares **entity** terms (distinctive anatomy/diagnosis, high weight), **feature** terms (supporting descriptors), and **data** shapes (measurements, dates). A bare measurement like "3 x 2 x 1 cm" stays low-confidence and surfaces the volume tools -- it does **not** confidently jump to a neuro calculator.
+- **Deliberately not edit-distance (Levenshtein).** Short medical terms have clinically different near-neighbours ("renal" vs "adrenal"), so blanket fuzzy matching would produce confident wrong suggestions. Speech-recognition variability is instead absorbed by curated alternations in the patterns (split words like "hypo echoic", dotted "I.P.M.N.", optional hyphens/spaces, known misrecognitions). Verified: "renal cyst" matches Bosniak and never adrenal.
+- Toggle "Suggest the best-matching calculator(s) from the highlighted text" in Preferences (on by default). New permutation suite `tests/test_dispatch.ahk` (38 cases) covers every calculator's signature plus the ambiguity, overlap, SR-variant, and safety cases.
+
+## Cleaner Preferences window
+
+- **Rebuilt the Preferences layout.** The root problem was that long toggle captions (e.g. "Show malignancy risk % (when published)") wrapped to two lines at the old 580 px width while the rows were spaced for one line -- so a wrapped checkbox overlapped the row beneath it. The window is now wider, captions are trimmed so nothing wraps, and every row advances past its *measured* height, so wrapping can never overlap again.
+- The 30 calculator toggles moved from two long columns to a compact **3-column grid**, cutting the window height and the crowded feel.
+- Accent section headers over hairline rules ("Display", "Menu and activation", "Calculators shown in the menu"), a proper bottom button bar (References / Target Apps / Restore Defaults on the left, Cancel / Save on the right), and consistent spacing throughout.
+- A new layout-audit test (`tests/test_prefs_layout.ahk`) opens the window in both light and dark mode and asserts that no interactive controls overlap and all fit within the window -- it now passes where the old layout failed.
+
+## Floating launcher widget
+
+- New optional **always-on-top launcher widget**: a small, non-intrusive button you can leave anywhere on screen. **Left-click** opens the context menu (no need to be over a reporting window), **left-drag** moves it (position is remembered), **right-click** gives Open / Hide / Preferences. It uses `WS_EX_NOACTIVATE` so clicking it never steals focus from the reporting app -- the text selection survives, so the menu still captures the highlighted report text. Off by default; toggle "Show floating launcher widget" in Preferences.
+
+## Faster menu
+
+- **The context menu opens noticeably quicker on (Ctrl+)right-click.** When you open the menu without a selection (the common case), every copy attempt necessarily comes back empty, and the old fallback chain waited through ~1.2 s of timeouts before the menu appeared. The capture budget is tightened to ~0.65 s worst case (first Ctrl+C 0.3 s, WM_COPY 0.15 s, one retry 0.2 s); a real selection still satisfies the wait the instant the app updates the clipboard, so successful captures are not slowed.
+
+## New calculators
+
+- **RV/LV Diameter Ratio (PE)** -- right-to-left ventricular short-axis diameter ratio on CT for right-heart-strain assessment in acute pulmonary embolism. Pre-filled from "RV ... mm / LV ... mm" in the selection. Reports the ratio factually with the published >= 1.0 strain threshold noted. Cardiovascular group. Reference: Meinel et al., *Am J Med* 2015.
+- **NASCET** moved from the Cardiovascular submenu to the new **Neuro / head** group (alongside ICH Volume).
+- **ICH Volume (ABC/2)** -- intracerebral hemorrhage volume by the Kothari 1996 method (A x B x C / 2, cm -> mL), pre-filled from a 3-dimension measurement in the selection, with cm/mm entry. Purely factual output (volume only, no asserted prognostic threshold). New "Neuro / head" menu group.
+- **Follow-up Date** -- recommended follow-up date from a base (study) date plus an interval (days / weeks / months / years). The base date defaults to today, is pre-filled from a MM/DD/YYYY date in the selection, and is editable; the interval is pre-filled from phrasing like "6 month follow-up". Month and year arithmetic is calendar-correct (end-of-month clamping, e.g. Jan 31 + 1 month = Feb 28/29; leap-year handling). "Scheduling" group.
+- Both ship with permutation tests (`tests/test_ich_followup.ahk`, 29 cases incl. every date-clamp and leap-year boundary).
+
 ## O-RADS MRI: rebuilt to match the source grid
 
 - **Menopausal status and lesion size are now inputs**, and the three physiologic Score-1 rows are modeled correctly: a simple/follicular or hemorrhagic cyst (incl. corpus luteum +/- hemorrhage) **<=3 cm in a premenopausal patient** scores O-RADS MRI 1. The prior version had no status/size input, so it could not reach Score 1 for these and mis-scored them as 2. The same lesion in a postmenopausal patient, or >3 cm, or with unspecified status, correctly does **not** get the physiologic downgrade.

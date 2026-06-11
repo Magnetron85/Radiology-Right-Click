@@ -25,6 +25,7 @@ global MENU_GROUP_ORDER := [
     "Renal",
     "Lung",
     "Cardiovascular",
+    "Neuro / head",
     "Adnexal / OB-Gyn",
     "Prostate",
     "Thyroid / neck",
@@ -87,8 +88,17 @@ CalculatorRegistry() {
         , pref:  "fleischnerCriteria",        group: "Lung"
         , handler: Fleischner_Entry }
 ,       { title: "NASCET (carotid)",          cmd: "CalculateNASCET"
-        , pref:  "nascetCalculator",          group: "Cardiovascular"
+        , pref:  "nascetCalculator",          group: "Neuro / head"
         , handler: NASCET_Entry }
+,       { title: "RV/LV Ratio (PE)",           cmd: "CalculateRVLV"
+        , pref:  "rvlvRatio",                 group: "Cardiovascular"
+        , handler: RVLV_Entry }
+,       { title: "ICH Volume (ABC/2)",         cmd: "CalculateICHVolume"
+        , pref:  "ichVolume",                 group: "Neuro / head"
+        , handler: ICHVolume_Entry }
+,       { title: "Follow-up Date",             cmd: "CalculateFollowUpDate"
+        , pref:  "followUpDate",              group: "Scheduling"
+        , handler: FollowUpDate_Entry }
 
         ; --- form-based RADS classifiers ---
 ,       { title: "Bosniak (renal cyst)",      cmd: "CalculateBosniak"
@@ -149,7 +159,20 @@ ShowContextMenu() {
 ; ---- menu construction -----------------------------------------------------
 
 BuildContextMenu() {
+    global g_LastSelectedText
     m := Menu()
+
+    items := CalculatorRegistry()
+    items := FilterEnabled(items)
+
+    ; --- Suggested section (smart match) -------------------------------------
+    ; When enabled and there is highlighted text, score every calculator and
+    ; pin the best 1-3 at the very top, above the edit commands. The top match
+    ; is set as the menu's bold default, but nothing runs until the user
+    ; clicks -- per design, the tool never auto-executes a calculator.
+    if (Prefs.Get("menu", "smartMatch", true) && g_LastSelectedText != "")
+        _AddSuggestedSection(m, items, g_LastSelectedText)
+
     ; SendEvent, NOT Send: v2's default SendInput bypasses the message
     ; queue, so apps with low-level keyboard hooks (PowerScribe / Dragon)
     ; never see the keystroke -- these items silently did nothing there
@@ -159,9 +182,6 @@ BuildContextMenu() {
     m.Add("Paste",  (*) => SendEvent("^v"))
     m.Add("Delete", (*) => SendEvent("{Delete}"))
     m.Add()
-
-    items := CalculatorRegistry()
-    items := FilterEnabled(items)
 
     method := Prefs.Get("menu", "sortingMethod", "grouped")
     if (method = "grouped")
@@ -175,6 +195,40 @@ BuildContextMenu() {
     m.Add()
     m.Add("Preferences", (*) => ShowPreferencesWindow())
     return m
+}
+
+; Pin the smart-match suggestions at the top of the menu. Each suggested
+; item reuses the calculator's normal handler; the tier ("strong"/"possible")
+; is shown so the radiologist can gauge confidence. The first (highest-scoring)
+; suggestion becomes the menu's bold default. Returns the number added.
+_AddSuggestedSection(m, items, text) {
+    suggestions := MatchCalculators(text)
+    if (suggestions.Length = 0)
+        return 0
+
+    byCmd := Map()
+    for item in items
+        byCmd[item.cmd] := item
+
+    added := 0
+    topLabel := ""
+    for r in suggestions {
+        if !byCmd.Has(r.cmd)
+            continue   ; calculator disabled in Preferences -- don't suggest it
+        item := byCmd[r.cmd]
+        label := item.title "   -- " r.tier " match"
+        m.Add(label, MakeHandler(item))
+        if (added = 0)
+            topLabel := label
+        added++
+    }
+    if (added = 0)
+        return 0
+
+    ; Bold the best match as the default item (the user still clicks to run).
+    try m.Default := topLabel
+    m.Add()   ; separator before the standard menu
+    return added
 }
 
 _BuildFlatMenuInto(m, items, method) {

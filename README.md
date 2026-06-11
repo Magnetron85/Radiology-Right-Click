@@ -230,6 +230,22 @@ Comparison to people of the same age and sex: High (75-90%)
 Arterial Age: 79 years
 ```
 
+#### RV/LV Ratio (PE)
+Right-to-left ventricular short-axis diameter ratio on CT, a marker of right-heart strain in acute pulmonary embolism. Enter the RV and LV maximum minor-axis diameters (endocardium to interventricular septum); pre-filled from "RV ... mm / LV ... mm" in the selection. Reports the ratio with the published ≥ 1.0 strain threshold noted (≥ 0.9 has also been used on axial images).
+
+Reference: Meinel FG et al. *Am J Med.* 2015;128(7):747–759.
+
+Selected text:
+```
+RV 42 mm, LV 35 mm
+```
+Result:
+```
+RV/LV diameter ratio 1.20 (RV 42 mm, LV 35 mm). Ratio >= 1.0, associated with right ventricular strain/dysfunction in acute pulmonary embolism.
+```
+
+### Neuro / head
+
 #### Calculate NASCET
 Carotid stenosis percentage from the distal ICA and residual lumen diameters. Reports the percentage plus mild/moderate/severe grade (NASCET cutoffs: <50, 50–69, >=70).
 
@@ -246,6 +262,20 @@ Distal: 6 mm
 Stenosis: 2 mm
 NASCET: 66.7%
 Moderate (50-69%)
+```
+
+#### ICH Volume (ABC/2)
+Intracerebral hemorrhage volume by the **ABC/2** method: A × B × C ÷ 2, where A, B, C are the three orthogonal hematoma diameters in cm (C is the vertical extent, conventionally slice count × thickness), giving volume in mL. Pre-fills the three dimensions from a measurement in the selection; accepts cm or mm. Output is factual (volume only) — no prognostic threshold is asserted.
+
+Reference: Kothari RU et al. *Stroke.* 1996;27(8):1304–1305.
+
+Selected text:
+```
+4.0 x 3.0 x 2.5 cm
+```
+Result:
+```
+Intracerebral hemorrhage volume 15.0 mL by the ABC/2 method (4 x 3 x 2.5 cm).
 ```
 
 ### Lung / pulmonary
@@ -355,6 +385,18 @@ Result popup:
 Opens a dialog (not a popup) where you pick the scan date, scan time, premedication protocol (Prednisone 13-7-1 or Methylprednisolone 12-2 — ACR Manual on Contrast Media), and whether to include diphenhydramine. **Calculate** produces a dated timeline of when each dose is due; **Show Dosages** shows the protocol's dosing card without a timeline.
 
 The text-selection part of the workflow doesn't apply here — this calculator ignores any highlighted text.
+
+#### Follow-up Date
+Computes a recommended follow-up date from a base (study) date plus an interval (days / weeks / months / years). The base date defaults to today, is pre-filled from a MM/DD/YYYY date in the selection when present, and is editable; the interval is pre-filled from phrasing like "6 month follow-up". Month and year arithmetic is calendar-correct — end-of-month dates clamp (Jan 31 + 1 month → Feb 28/29) and leap years are handled.
+
+Selected text:
+```
+Recommend 6 month follow-up.
+```
+Result (base date today):
+```
+Recommended follow-up by 12/10/2026 (6 months from 06/10/2026).
+```
 
 ---
 
@@ -560,6 +602,7 @@ Result popup includes:
 - **Calculator visibility** — one checkbox per toggleable calculator (including the v2.1 RADS classifiers). Compare / Sort Measurement Sizes are always visible.
 - **Menu sorting** — `alphabetical` (default, case-insensitive by title), `frequency` (most-used first, alphabetical for ties), or `none` (registry order).
 - **Right-click modifier** — `none` (plain right-click), `Ctrl` (default), `Alt`, or `Shift`. Determines what combination opens the helper menu.
+- **Show floating launcher widget** — a small always-on-top button you can leave anywhere on screen. Left-click opens the menu (no need to be over a reporting window), left-drag moves it (position is remembered), right-click gives Open / Hide / Preferences. It never steals focus, so the highlighted report text is preserved when you click it. Off by default.
 - **References...** — opens the reference manager (see below).
 - **Target Apps...** — opens the target-app editor (see below).
 - **Restore Defaults** — resets toggles, sort method, modifier, and target apps back to defaults. Your saved references and frequency counts are kept.
@@ -646,7 +689,7 @@ lib/
   References.ahk            URL / file reference manager
   Util.ahk                  Shared helpers (regex, dates, clipboard, safety)
   Debug.ahk                 Conditional logging framework (off by default)
-  calc/                     One file per calculator (25 total)
+  calc/                     One file per calculator (28 total)
 ```
 
 ---

@@ -177,6 +177,9 @@ class Prefs {
             "contrastPremedication", true,
             "fleischnerCriteria",    true,
             "nascetCalculator",      true,
+            "rvlvRatio",             true,
+            "ichVolume",             true,
+            "followUpDate",          true,
             "bosniak",               true,
             "gbPolyp",               true,
             "incidentalAdrenal",     true,
@@ -204,7 +207,10 @@ class Prefs {
             ]
         )
         d["menu"] := Map(
-            "sortingMethod", "grouped"  ; grouped (anatomical) | alphabetical | frequency | none
+            "sortingMethod", "grouped",  ; grouped (anatomical) | alphabetical | frequency | none
+            ; Suggest the best-matching calculator(s) at the top of the menu
+            ; based on the highlighted text (lib/Dispatch.ahk).
+            "smartMatch", true
         )
         d["clipboard"] := Map(
             ; When true, the clipboard payload loaded on result-window open is
@@ -212,6 +218,13 @@ class Prefs {
             ; module's pasteMode (see CalcResult.PasteText), so pasting over
             ; the selection yields a clean report line. False -> result only.
             "includeSelection", true
+        )
+        d["widget"] := Map(
+            ; Persistent always-on-top launcher button (lib/Widget.ahk). Off by
+            ; default; x/y are saved when the user drags it. "" -> default spot.
+            "enabled", false,
+            "x",       "",
+            "y",       ""
         )
         d["references"] := []
         d["frequency"]  := Map()
