@@ -1,5 +1,15 @@
 # v2.1 -> v2.1.1 changes
 
+## O-RADS MRI: rebuilt to match the source grid
+
+- **Menopausal status and lesion size are now inputs**, and the three physiologic Score-1 rows are modeled correctly: a simple/follicular or hemorrhagic cyst (incl. corpus luteum +/- hemorrhage) **<=3 cm in a premenopausal patient** scores O-RADS MRI 1. The prior version had no status/size input, so it could not reach Score 1 for these and mis-scored them as 2. The same lesion in a postmenopausal patient, or >3 cm, or with unspecified status, correctly does **not** get the physiologic downgrade.
+- **Added the lesion types that were missing**: dilated fallopian tube (simple/thin -> 2, non-simple or thick wall -> 3) and para-ovarian cyst (thin smooth wall -> 2).
+- **Split the unilocular fluid types** to drive the Score 2 vs 3 wall-enhancement rows exactly (simple/endometriotic -> 2; proteinaceous/hemorrhagic/mucinous -> 3; unspecified -> conservative 3).
+- **Multilocular cysts with irregular enhancing septae/wall** now route through the solid-tissue pathway (irregular enhancing septation is "solid tissue" per the source footnote), instead of being scored as a smooth-septate Score 3.
+- **Added the non-DCE enhancement rows** (solid tissue enhancing <= myometrium at 30-40 s -> 4; > myometrium -> 5) alongside the DCE time-intensity-curve rows, with an accuracy caveat.
+- Ascites without peritoneal nodularity no longer implies anything on its own (it attaches to the nodularity row); an advisory flags it, and another advisory prompts for menopausal status when it would change a borderline cyst's score.
+- The classifier was restructured to take a single props object and now returns the specific source row it applied (shown in the methodology block). New permutation suite `tests/test_oradsmri_50.ahk` covers 47 rows including every physiologic-vs-not status/size boundary; all pass.
+
 ## Calculator dialog overhaul (progressive disclosure)
 
 - **The form engine (`lib/FormGui.ahk`) now supports true progressive disclosure.** `SetVisible` HIDES an irrelevant field (instead of greying it), collapses its space -- rows below slide up and the window resizes live, flicker-free -- and resets the hidden control to its default so a stale answer can never reach the classifier; re-showing restores the user's prior value. New `SetSectionVisible` toggles an entire header section in one relayout.
