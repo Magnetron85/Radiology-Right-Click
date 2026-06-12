@@ -202,15 +202,26 @@ ClampToWorkArea(x, y, w, h, work) {
     return { x: x, y: y }
 }
 
-; Fit a desired (w, h) into the active work area, leaving a margin, then
-; place at (x, y) and clamp inside. Returns { x, y, w, h }. Use this
-; instead of ClampToWorkArea when the window itself may be larger than the
-; monitor (e.g. small laptops). Caller decides whether to add scroll bars
-; when the height is capped.
+; Unit contract (verified against the AHK v2.0 source, GuiType::Show):
+; Gui.Show("x.. y.. w.. h..") treats X/Y as PHYSICAL screen pixels but
+; multiplies W/H by A_ScreenDPI/96 -- and DPIScale is on by default for
+; every Gui. Cursor and monitor coords (MouseGetPos, MonitorGetWorkArea)
+; are physical. So clamping must use the window's PHYSICAL footprint
+; (w * A_ScreenDPI/96) even though Show is then given the LOGICAL w/h.
+; Getting this wrong is invisible at 100% scaling and pushes windows off
+; the bottom/right edge at 125-175%.
+
+; Fit a desired LOGICAL (w, h) into the active work area, leaving a
+; margin, then place at the PHYSICAL anchor (x, y) and clamp inside.
+; Returns { x, y, w, h } with x/y physical and w/h logical -- pass them
+; straight to Gui.Show. Use this instead of ClampToWorkArea when the
+; window itself may be larger than the monitor (e.g. small laptops).
+; Caller decides whether to add scroll bars when the height is capped.
 FitWindow(desiredW, desiredH, anchorX, anchorY, work, margin := 24) {
-    w := Min(desiredW, work.width  - margin)
-    h := Min(desiredH, work.height - margin)
-    pos := ClampToWorkArea(anchorX, anchorY, w, h, work)
+    scale := A_ScreenDPI / 96
+    w := Min(desiredW, Floor((work.width  - margin) / scale))
+    h := Min(desiredH, Floor((work.height - margin) / scale))
+    pos := ClampToWorkArea(anchorX, anchorY, Round(w * scale), Round(h * scale), work)
     return { x: pos.x, y: pos.y, w: w, h: h, capped: (h < desiredH) }
 }
 

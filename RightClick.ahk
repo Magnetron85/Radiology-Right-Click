@@ -82,6 +82,18 @@ SetAppDarkMode(Prefs.Get("display", "darkMode", false))
 Launcher.Apply()   ; show the persistent launcher widget if enabled
 OnExit((*) => Prefs.Flush())   ; persist any pending frequency increments
 
+; This process is system-DPI-aware, so on a monitor whose scale differs
+; from the system DPI the DWM shows a bitmap-stretched copy of each
+; window. When a drag ends, DWM sometimes re-composites that stretched
+; surface before the window repaints, leaving narrow white vertical
+; bands. A full redraw on move-end clears them. OnMessage only fires
+; for this script's own windows, so no filtering is needed.
+OnMessage(0x0232, _RedrawAfterMove)   ; WM_EXITSIZEMOVE
+
+_RedrawAfterMove(wParam, lParam, msg, hwnd) {
+    try WinRedraw(hwnd)
+}
+
 ; ------------------------------------------------------------
 ; Hotkey: right-click in a target window, optionally gated by a
 ; modifier (Ctrl / Alt / Shift) set in Preferences. Defined via

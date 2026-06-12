@@ -121,7 +121,10 @@ ShowAddReferenceDialog() {
     MouseGetPos(&mx, &my)
     work := GetWorkAreaAt(mx, my)
     w := 420, h := 220
-    pos := ClampToWorkArea(mx + 12, my + 12, w, h, work)
+    ; w/h are logical units (Gui.Show scales them); clamp with the
+    ; physical footprint so the window stays on-screen at >100% scaling.
+    scale := A_ScreenDPI / 96
+    pos := ClampToWorkArea(mx + 12, my + 12, Round(w * scale), Round(h * scale), work)
 
     g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "Add Reference")
     g.MarginX := 16, g.MarginY := 14
@@ -257,7 +260,10 @@ ShowReferencesManager() {
     MouseGetPos(&mx, &my)
     work := GetWorkAreaAt(mx, my)
     w := 560, h := 360
-    pos := ClampToWorkArea(mx + 12, my + 12, w, h, work)
+    ; Same unit contract as ShowAddReferenceDialog: logical w/h, clamp
+    ; using physical pixels.
+    scale := A_ScreenDPI / 96
+    pos := ClampToWorkArea(mx + 12, my + 12, Round(w * scale), Round(h * scale), work)
 
     g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "Manage References")
     g.MarginX := 16, g.MarginY := 14

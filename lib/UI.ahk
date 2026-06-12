@@ -55,9 +55,13 @@ ShowResult(payload) {
     MouseGetPos(&mx, &my)
     work := GetWorkAreaAt(mx, my)
 
+    ; Window w/h below are logical (DPI-scaled) units -- Gui.Show scales
+    ; W/H but not X/Y -- so work-area-derived caps must be converted from
+    ; physical pixels, and clamping must use the physical footprint.
+    scale := A_ScreenDPI / 96
     targetW := 640
-    maxW := Min(targetW, Round(work.width * 0.55))
-    maxH := Round(work.height * 0.80)
+    maxW := Min(targetW, Round(work.width * 0.55 / scale))
+    maxH := Round(work.height * 0.80 / scale)
 
     ; Measure the worst-case text (all toggles on) so the window doesn't
     ; clip when the user enables methodology after open.
@@ -86,7 +90,7 @@ ShowResult(payload) {
     contentH := th + chkH + sectionGap + linksH + btnH + sectionGap*2
     h := Min(Max(contentH + pad*2, 260), maxH)
 
-    pos := ClampToWorkArea(mx + 12, my + 12, w, h, work)
+    pos := ClampToWorkArea(mx + 12, my + 12, Round(w * scale), Round(h * scale), work)
 
     g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "Result")
     g.MarginX := pad, g.MarginY := pad
@@ -180,9 +184,11 @@ ShowResult(payload) {
     g.Show("x" pos.x " y" pos.y " w" w " h" h)
     WinActivate("ahk_id " g.Hwnd)
 
-    ; Park cursor on Close for one-click dismiss.
+    ; Park cursor on Close for one-click dismiss. Control GetPos returns
+    ; logical units; MouseMove wants physical screen pixels.
     btnClose.GetPos(&bx, &by, &bw, &bh)
-    MouseMove(pos.x + bx + bw/2, pos.y + by + bh/2, 0)
+    MouseMove(pos.x + Round((bx + bw/2) * scale)
+            , pos.y + Round((by + bh/2) * scale), 0)
 
     ; Initial clipboard payload: paste-ready composition of the user's
     ; original selection + this result (per the module's pasteMode), so

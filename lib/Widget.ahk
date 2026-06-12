@@ -92,11 +92,14 @@ class Launcher {
         sy := Prefs.Get("widget", "y", "")
         MouseGetPos(&mx, &my)
         work := GetWorkAreaAt(mx, my)
+        ; size is a logical unit (Gui.Show scales w/h); placement math is
+        ; in physical pixels, so use the widget's physical footprint.
+        sizePx := Round(size * A_ScreenDPI / 96)
         if (sx = "" || sy = "") {
-            return { x: work.right - size - 24, y: work.top + 120 }
+            return { x: work.right - sizePx - 24, y: work.top + 120 }
         }
         ; Clamp a saved position back on-screen (monitor layout may change).
-        clamped := ClampToWorkArea(sx + 0, sy + 0, size, size, work)
+        clamped := ClampToWorkArea(sx + 0, sy + 0, sizePx, sizePx, work)
         return { x: clamped.x, y: clamped.y }
     }
 
