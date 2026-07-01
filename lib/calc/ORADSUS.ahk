@@ -148,11 +148,12 @@ ORADSUS_OnSubmit(v, form := "") {
 
     score := _OU_Score(lt, classic, size, hasSolid, pap, contour, color, asc, perit, meno, shadowing)
     info := _OU_Cats()[score]
+    mgmt := _OU_Mgmt(score, lt, classic, size, meno)
 
     showRisk := Prefs.Get("display", "showMalignancyRisk", true)
     sizePhrase := size > 0 ? Format("{:.1f}", size) " cm " : ""
     descLc := (info.desc != "") ? StrLower(SubStr(info.desc, 1, 1)) SubStr(info.desc, 2) : ""
-    mgmtLc := (info.mgmt != "") ? StrLower(SubStr(info.mgmt, 1, 1)) SubStr(info.mgmt, 2) : ""
+    mgmtLc := (mgmt != "") ? StrLower(SubStr(mgmt, 1, 1)) SubStr(mgmt, 2) : ""
     impression := sizePhrase "adnexal lesion, O-RADS US " score " (" descLc ")"
     if (showRisk && info.risk != "")
         impression .= ", malignancy risk " info.risk
@@ -168,7 +169,7 @@ ORADSUS_OnSubmit(v, form := "") {
     method .= "`nO-RADS " score " -- " info.desc
     if (info.risk != "")
         method .= "`nMalignancy risk: " info.risk
-    method .= "`nFull management: " info.mgmt
+    method .= "`nFull management: " mgmt
 
     return MakeResult({
         classification: "O-RADS US " score,
@@ -241,6 +242,11 @@ _OU_Score(lt, classic, size, hasSolid, pap, contour, color, asc, perit, meno, sh
     ; component(s), any size, CS 3-4". Added "bilocular" to the rule.
     else if (hasSolid && (lt = "bilocular" || lt = "multilocular" || lt = "mixed") && color >= 3)
         score := 5
+    ; Hydrosalpinx is a benign EXTRA-ovarian lesion: Score 2 at any size.
+    ; The size>=10 cm -> Score 3 upgrade applies only to ovarian classic
+    ; benign lesions (dermoid, endometrioma, hemorrhagic cyst).
+    else if (classic = "hydrosalpinx")
+        score := 2
     else if (classic != "none" && size < 10)
         score := 2
     else if (classic != "none" && size >= 10)
@@ -287,6 +293,56 @@ _OU_Score(lt, classic, size, hasSolid, pap, contour, color, asc, perit, meno, sh
     return score
 }
 
+; Score 2 management is menopause-, size-, and lesion-type-specific in the
+; O-RADS US v2022 grid; every other score carries a single management block.
+; Returning the static Score 2 string for all lesions gave the premenopausal
+; simple-cyst recommendation to postmenopausal patients and to non-simple
+; lesions -- the bug this resolves. Cells below are transcribed from the ACR
+; v2022 "Assessment Categories" and "Classic Benign Lesions" tables.
+_OU_Mgmt(score, lt, classic, size, meno) {
+    if (score != 2)
+        return _OU_Cats()[score].mgmt
+
+    ; --- Classic Benign Lesions table (own management, independent of the
+    ;     simple/unilocular/bilocular cyst rows) ---
+    if (classic = "dermoid")
+        return (size <= 3)
+            ? "May consider follow-up ultrasound in 12 months."
+            : "If not surgically excised, follow-up ultrasound in 12 months."
+    if (classic = "endometrioma")
+        return (meno = "post")
+            ? "Confirm with follow-up ultrasound in 2-3 months or MRI; if not excised, follow-up ultrasound in 12 months."
+            : "If not surgically excised, follow-up ultrasound in 12 months."
+    if (classic = "hemorrhagic_cyst")
+        return (meno = "post")
+            ? "A hemorrhagic cyst is unexpected after menopause; confirm with follow-up ultrasound in 2-3 months or MRI, or recategorize using other lexicon descriptors."
+            : (size <= 5)
+                ? "No follow-up."
+                : "Follow-up ultrasound in 2-3 months."
+    if (classic = "hydrosalpinx")
+        return "No follow-up."
+
+    ; --- Assessment Categories table, Score 2 cystic rows ---
+    if (lt = "simple_cyst") {
+        ; Premenopausal simple cyst <=3 cm is Score 1 (physiologic follicle),
+        ; so only the postmenopausal <=3 cm cell ("None") reaches here.
+        if (size <= 3)
+            return "No follow-up."
+        if (size <= 5)   ; >3 to 5 cm
+            return (meno = "post") ? "Follow-up ultrasound in 12 months." : "No follow-up."
+        return "Follow-up ultrasound in 12 months."   ; >5 to <10 cm, either status
+    }
+    ; Unilocular smooth non-simple (internal echoes/incomplete septations) or
+    ; bilocular smooth cyst -- shared management row.
+    if (lt = "unilocular" || lt = "bilocular") {
+        if (size <= 3)
+            return (meno = "post") ? "Follow-up ultrasound in 12 months." : "No follow-up."
+        return "Follow-up ultrasound in 6 months."    ; >3 to <10 cm, either status
+    }
+
+    return _OU_Cats()[score].mgmt   ; fallback (unreached for known Score 2 lesions)
+}
+
 _OU_Cats() {
     static m := _OU_BuildCats()
     return m
@@ -297,7 +353,9 @@ _OU_BuildCats() {
     ; Source: O-RADS US v2022 does not state a numeric malignancy risk for
     ; Score 1 (only Score 2+ have stated risk ranges).
     m[1] := { desc: "Normal",                  risk: "N/A",     mgmt: "No follow-up." }
-    m[2] := { desc: "Almost certainly benign", risk: "<1%",     mgmt: "No follow-up if <10 cm." }
+    ; Score 2 management is resolved per-lesion by _OU_Mgmt (menopause-,
+    ; size-, and type-specific); this string is only an unreached fallback.
+    m[2] := { desc: "Almost certainly benign", risk: "<1%",     mgmt: "Management per O-RADS US v2022 by menopausal status and size." }
     m[3] := { desc: "Low risk",                risk: "1-10%",   mgmt: "Follow-up ultrasound in 6 months or MRI." }
     m[4] := { desc: "Intermediate risk",       risk: "10-50%",  mgmt: "MRI or gynecologic oncology consultation." }
     m[5] := { desc: "High risk",               risk: ">=50%",   mgmt: "Referral to gynecologic oncology." }

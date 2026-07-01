@@ -232,8 +232,20 @@ _DoublingTime(v0, v1, yrs) {
 ; ---------- Sort -----------------------------------------------------------
 
 SortSizes_Entry(input) {
+    global g_LastSelectedText
     if (input = "")
         return ""
+
+    ; Sort pastes directly over the selection and shows no result window, so --
+    ; unlike the GUI calculators, which reset the menu's capture cache via
+    ; _ClearLastSelection when their result window closes -- nothing else would
+    ; clear g_LastSelectedText. Once this selection has been consumed, drop it:
+    ; otherwise a later right-click whose fresh capture returns empty (PowerScribe
+    ; drops its selection when the context menu takes focus) would fall back to
+    ; THIS stale text and re-sort it over a different, newly highlighted
+    ; measurement. Clearing turns that failure into a safe no-op instead.
+    g_LastSelectedText := ""
+
     processed := _SortAllMeasurements(input)
     if (processed = input)
         return ""
@@ -249,7 +261,10 @@ SortSizes_Entry(input) {
         A_Clipboard := saved
         return "Sort failed: clipboard did not accept the new value."
     }
-    Send "^v"
+    ; SendEvent, not the v2 default SendInput: dictation systems (PowerScribe /
+    ; Dragon) run low-level keyboard hooks that SendInput bypasses, so the paste
+    ; silently no-ops there. Same reasoning as GetSelectedText and the menu.
+    SendEvent "^v"
     Sleep 100
     A_Clipboard := saved
     return ""
