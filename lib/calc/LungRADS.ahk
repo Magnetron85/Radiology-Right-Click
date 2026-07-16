@@ -37,6 +37,10 @@
 ;             multiple exams is 4B per note 8.
 ;   S      -- Modifier for clinically significant findings unrelated to
 ;             lung cancer (added to 0-4).
+;   NC     -- "Not classified in Lung-RADS": thin-walled cyst (note 12a),
+;             fluid-containing cyst (note 12g), multiple cysts / LCH-LAM
+;             (note 12h), and known lung cancer diagnosis (note 16).
+;             The exam category is driven by other classified findings.
 ; ============================================================
 
 #Requires AutoHotkey v2.0
@@ -107,17 +111,21 @@ ShowLungRADSDialog(initialText := "") {
     form.Dropdown("Round", "Screening round:"
         , ["Baseline (first screen)"
         ,  "Incident (new, increased, or decreased from prior)"], 1)
+    form.CheckboxRow2("AwaitingPriors", "Awaiting prior exams (note 9 -> Cat 0)"
+                   , "KnownCancer",     "Known lung cancer diagnosis (note 16)", false, false)
     form.NumericRow2(
         "SizeMm",  "Mean diameter (mm):", "SolidMm", "Solid component (mm):"
       , sz.mm > 0 ? Round(sz.mm, 1) : 0, 0)
     form.CheckboxNumericRow(
         "NewGrowSolidComp", "Solid component new/growing (note 5)"
       , "NewSolidMm",       "New/growing comp. (mm):", false, 0)
-    form.Dropdown("AirwayLoc", "Airway location:"
+    form.Dropdown("AirwayLoc", "Airway location (note 11):"
         , ["N/A"
-        ,  "Subsegmental"
+        ,  "Subsegmental (benign -- Cat 2, note 11b)"
+        ,  "Subsegmental and/or multiple tubular -- favors infection (Cat 0, note 11b)"
         ,  "Segmental or more proximal -- at baseline"
-        ,  "Segmental or more proximal -- stable or growing on follow-up"], 1)
+        ,  "Segmental or more proximal -- contains air, favors secretions (Cat 2, note 11c)"
+        ,  "Segmental or more proximal -- stable, growing, or persists at 3-mo follow-up (note 11d)"], 1)
     form.Dropdown("CystFeat", "Atypical cyst features (note 12):"
         , ["N/A"
         ,  "Cat 3: Growing cystic component of a thick-walled cyst"
@@ -126,7 +134,11 @@ ShowLungRADSDialog(initialText := "") {
         ,  "Cat 4A: Thin- or thick-walled that becomes multilocular"
         ,  "Cat 4B: Thick-walled with growing wall thickness or nodularity"
         ,  "Cat 4B: Growing multilocular cyst"
-        ,  "Cat 4B: Multilocular with new/increased loculation or opacity"], 1)
+        ,  "Cat 4B: Multilocular with new/increased loculation or opacity"
+        ,  "Not classified: Thin-walled cyst (benign, note 12a)"
+        ,  "Not classified: Fluid-containing cyst (possibly infectious, note 12g)"
+        ,  "Not classified: Multiple cysts (consider LCH / LAM, note 12h)"], 1)
+    form.Checkbox("CystNodule", "Cyst has an associated (endophytic / exophytic) nodule -- manage by the most concerning feature (note 12e)", false)
     form.Dropdown("BenignFeat", "Benign features (Cat 1 / Cat 2 override):"
         , ["None"
         ,  "Benign calcification (complete / central / popcorn / concentric ring)"
@@ -158,7 +170,7 @@ ShowLungRADSDialog(initialText := "") {
         , ["Not assessed / no prior comparison"
         ,  "New: nodule not present on prior exam"
         ,  "Growing (>1.5 mm in <=12 mo, note 6)"
-        ,  "Slow growth across multiple screenings, below threshold (note 8 -> 4B)"
+        ,  "Slow growth across multiple screenings, below threshold (solid/part-solid: note 8 -> 4B; GGN: note 7 -> 2)"
         ,  "Stable or decreased, no specific downgrade -- reclassify by size (note 5)"
         ,  "Cat 3 stable/decreased at 6-mo follow-up (downgrade to Cat 2)"
         ,  "Cat 4A stable/decreased at 3-mo follow-up (downgrade to Cat 3; excludes airway)"
@@ -169,8 +181,15 @@ ShowLungRADSDialog(initialText := "") {
                    , "Lymphadenop",     "Lymphadenopathy", preSpicul, preLymph)
     form.CheckboxRow2("PleuralTether",  "Pleural tethering / retraction / invasion"
                    , "GGNDoubling",     "GGN doubled in size in 1 year", prePleural, preGGNDouble)
-    form.CheckboxRow2("SegLobarConsol", "Segmental / lobar consolidation  (-> Cat 0)"
-                   , "MultNewNodules",  "Multiple new nodules  (-> Cat 0)", false, false)
+    ; Note 10a triggers as a single dropdown: every option routes to the
+    ; same Cat 0 + 1-3 month LDCT outcome, so a single choice loses nothing
+    ; -- and it keeps the tallest form configuration inside the work area.
+    form.Dropdown("InfectFind", "Infectious / inflammatory findings (note 10):"
+        , ["None"
+        ,  "Segmental or lobar consolidation (-> Cat 0)"
+        ,  "Multiple (>6) new nodules (-> Cat 0)"
+        ,  "New large solid nodule(s) >=8 mm in a short interval (-> Cat 0)"
+        ,  "New nodule(s) in an immunocompromised patient (-> Cat 0)"], 1)
     form.Checkbox("SMod", "S modifier (clinically significant non-lung-cancer finding, note 15)", false)
 
     ; Lesion-type dependent fields: SolidMm + NewGrowSolidComp + NewSolidMm
@@ -211,6 +230,7 @@ _LUR_UpdateForm(frm, priorCatChanged := false) {
     frm.SetVisible("NewSolidMm",       t = "part-solid")
     frm.SetVisible("AirwayLoc",  t = "airway")
     frm.SetVisible("CystFeat",   t = "cyst")
+    frm.SetVisible("CystNodule", t = "cyst")
     frm.SetVisible("BenignFeat", isParenchymal)
 
     ; Prior + Interval + PriorCat + the unified Behavior dropdown are
@@ -338,6 +358,9 @@ LungRADS_OnSubmit(v, form := "") {
     airwayLoc := _LUR_AirwayFromLabel(v.AirwayLoc)
     cystFeat := _LUR_CystFromLabel(v.CystFeat)
     sMod := !!v.SMod
+    awaitingPriors := !!v.AwaitingPriors
+    knownCancer := !!v.KnownCancer
+    cystNodule := !!v.CystNodule
 
     ; Unified Behavior dropdown -> classifier params. The states are
     ; mutually exclusive, which is enforced by the single dropdown.
@@ -374,16 +397,20 @@ LungRADS_OnSubmit(v, form := "") {
         text .= " pleural tethering"
     if (v.GGNDoubling = 1)
         text .= " doubled in size 1 year"
-    if (v.SegLobarConsol = 1)
+    if InStr(v.InfectFind, "consolidation")
         text .= " segmental consolidation"
-    if (v.MultNewNodules = 1)
+    else if InStr(v.InfectFind, "Multiple")
         text .= " multiple new nodules"
+    else if InStr(v.InfectFind, "large solid")
+        text .= " new large solid nodules in short interval"
+    else if InStr(v.InfectFind, "immunocompromised")
+        text .= " immunocompromised patient"
     text := Trim(text)
 
     r := _LUR_Classify(ntype, size, isBaseline, solidMm, text, isGrowing
                      , benignFeat, airwayLoc, cystFeat, stableDg
                      , newGrowSolidComp, newSolidMm, slowGrowth, sMod
-                     , isStableDecreased)
+                     , isStableDecreased, awaitingPriors, knownCancer)
 
     ; v2022 source-gap advisory: a GGN <30 mm that doubled in <=12 months
     ; stays Cat 2 per the size-driven grid (any-growth-state GGN <30 = 2),
@@ -407,12 +434,20 @@ LungRADS_OnSubmit(v, form := "") {
     typeWord := _LUR_TypeWord(ntype)
     descLc := (r.descriptor != "") ? StrLower(SubStr(r.descriptor, 1, 1)) SubStr(r.descriptor, 2) : ""
     shortRec := _LUR_ShortRec(r.category)
-    impression := sizePhrase typeWord " pulmonary nodule, Lung-RADS " r.category
-               . " (" descLc ") per Lung-RADS v2022"
-    if (shortRec != "")
-        impression .= "; " shortRec
-    if (SubStr(impression, -1) != ".")
-        impression .= "."
+    if (r.category = "NC") {
+        ; Not-classified pathways (notes 12a / 12g / 12h / 16) have no
+        ; Lung-RADS category -- the impression states why instead of
+        ; asserting a numbered score.
+        impression := r.reason "; not classified in Lung-RADS per Lung-RADS v2022. "
+                    . "Exam category is determined by the most suspicious classified finding, if any."
+    } else {
+        impression := sizePhrase typeWord " pulmonary nodule, Lung-RADS " r.category
+                   . " (" descLc ") per Lung-RADS v2022"
+        if (shortRec != "")
+            impression .= "; " shortRec
+        if (SubStr(impression, -1) != ".")
+            impression .= "."
+    }
 
     method := ""
     if form
@@ -427,12 +462,23 @@ LungRADS_OnSubmit(v, form := "") {
     if (r.baseCategory != "" && r.baseCategory != r.category)
         method .= "`nBase size-derived category: " r.baseCategory
 
+    ; Practice audit definitions (note 3), keyed off the final category.
+    catBase := RegExReplace(r.category, "S$", "")
+    if (catBase = "1" || catBase = "2")
+        method .= "`nPractice audit (note 3): NEGATIVE screen (categories 1-2). A negative screen does not mean the individual does not have lung cancer."
+    else if (catBase = "3" || catBase = "4A" || catBase = "4B" || catBase = "4X")
+        method .= "`nPractice audit (note 3): POSITIVE screen (categories 3-4)."
+    method .= "`nCoding (note 1): code the exam 0-4 by the nodule with the highest degree of suspicion."
+    method .= "`nMeasurement (note 4): mean diameter = (long + short axis) / 2, each axis to 0.1 mm in any plane; volumes to the nearest whole mm3."
+
     advisories := []
     if (r.note != "")
         advisories.Push(r.note)
+    if (ntype = "cyst" && cystNodule)
+        advisories.Push("Cyst with an associated nodule (note 12e): management is based on Lung-RADS criteria for the most concerning feature -- also classify the associated nodule under its own lesion type (solid / part-solid / GGN) and act on the higher category.")
 
     return MakeResult({
-        classification: "Lung-RADS " r.category,
+        classification: r.category = "NC" ? "Lung-RADS: not classified" : "Lung-RADS " r.category,
         impression:     impression,
         recommendation: "",
         advisories:     advisories,
@@ -505,11 +551,18 @@ _LUR_BenignFromLabel(label) {
     return "none"
 }
 _LUR_AirwayFromLabel(label) {
+    ; Check the more specific variants before their broader siblings --
+    ; "Subsegmental" is a prefix of both note-11b options, and "Segmental
+    ; or more proximal" starts three different rows.
+    if InStr(label, "favors infection")
+        return "subseg-infectious"
     if InStr(label, "Subsegmental")
         return "subsegmental"
+    if InStr(label, "favors secretions")
+        return "seg-air-secretions"
     if InStr(label, "Segmental or more proximal -- at baseline")
         return "seg-baseline"
-    if InStr(label, "Segmental or more proximal -- stable or growing")
+    if InStr(label, "Segmental or more proximal -- stable")
         return "seg-stable-or-growing"
     return ""
 }
@@ -528,12 +581,28 @@ _LUR_CystFromLabel(label) {
         return "cyst-4b-grow-multi"
     if InStr(label, "Cat 4B: Multilocular with new/increased")
         return "cyst-4b-multi-incr"
+    if InStr(label, "Not classified: Thin-walled")
+        return "cyst-nc-thin"
+    if InStr(label, "Not classified: Fluid-containing")
+        return "cyst-nc-fluid"
+    if InStr(label, "Not classified: Multiple cysts")
+        return "cyst-nc-multiple"
     return ""
 }
 _LUR_Classify(ntype, size, isBaseline, solidMm, text, isGrowing
             , benignFeat := "none", airwayLoc := "", cystFeat := "", stableDg := ""
             , newGrowSolidComp := false, newSolidMm := 0, slowGrowth := false
-            , sMod := false, isStableDecreased := false) {
+            , sMod := false, isStableDecreased := false
+            , awaitingPriors := false, knownCancer := false) {
+    ; ---- Step 0: exam-level states (notes 9 / 16) ----
+    ; A lung cancer diagnosis takes the exam out of screening entirely, so
+    ; it outranks every nodule-level rule (text scan skipped -- 4X /
+    ; infectious routing is meaningless outside screening).
+    if knownCancer
+        return _LUR_Finalize(_LUR_Cat("NC", "Known lung cancer diagnosis -- further imaging is for staging / management, no longer screening (note 16)"), "", sMod)
+    if awaitingPriors
+        return _LUR_Finalize(_LUR_Cat("0", "Awaiting prior exams -- Lung-RADS 0 is temporary until the comparison study is available and a new category is assigned (note 9)"), text, sMod)
+
     ; ---- Step 1: explicit downgrade overrides (v2022 Cat 2 / Cat 3 rows) ----
     ; These short-circuit the size-based classifier.
     if (stableDg = "cat3-stable-6mo" || stableDg = "cat4b-proven-benign")
@@ -559,16 +628,34 @@ _LUR_Classify(ntype, size, isBaseline, solidMm, text, isGrowing
     ; ---- Step 3: explicit lesion-type branches ----
     if (ntype = "airway") {
         if (airwayLoc = "subsegmental")
-            r := _LUR_Cat("2", "Airway nodule, subsegmental -- at baseline / new / stable (note 11)")
+            r := _LUR_Cat("2", "Airway nodule, subsegmental -- at baseline / new / stable (note 11b)")
+        else if (airwayLoc = "subseg-infectious")
+            r := _LUR_Cat("0", "Airway abnormality, subsegmental and/or multiple tubular -- favors an infectious process, no underlying obstructive nodule (note 11b)")
         else if (airwayLoc = "seg-baseline")
-            r := _LUR_Cat("4A", "Airway nodule, segmental or more proximal -- at baseline (note 11)")
+            r := _LUR_Cat("4A", "Airway nodule, segmental or more proximal -- at baseline (note 11a)")
+        else if (airwayLoc = "seg-air-secretions")
+            r := _LUR_Cat("2", "Airway abnormality, segmental or more proximal, containing air -- favors secretions, no underlying soft-tissue nodule (note 11c)")
         else if (airwayLoc = "seg-stable-or-growing")
-            r := _LUR_Cat("4B", "Airway nodule, segmental or more proximal -- stable or growing (note 11)")
+            r := _LUR_Cat("4B", "Airway nodule, segmental or more proximal -- stable, growing, or persisting at 3-mo follow-up (notes 11a / 11d)")
         else
             r := _LUR_Cat("0", "Airway nodule selected but airway location not specified; please pick a location")
         return _LUR_Finalize(r, text, sMod, true)
     }
     if (ntype = "cyst") {
+        ; Not-classified cyst rows (notes 12a / 12g / 12h): these are not
+        ; scored in Lung-RADS at all -- the exam category comes from other
+        ; classified findings.
+        if (cystFeat = "cyst-nc-thin" || cystFeat = "cyst-nc-fluid" || cystFeat = "cyst-nc-multiple") {
+            reason := cystFeat = "cyst-nc-thin"  ? "Thin-walled cyst -- considered benign (note 12a)"
+                    : cystFeat = "cyst-nc-fluid" ? "Fluid-containing cyst -- may represent an infectious process (note 12g)"
+                                                 : "Multiple cysts -- may indicate an alternative diagnosis such as LCH or LAM (note 12h)"
+            r := _LUR_Cat("NC", reason)
+            if (cystFeat = "cyst-nc-fluid")
+                r.note := "Fluid-containing cysts may represent an infectious process; correlate clinically. Classify in Lung-RADS only if other concerning features are identified (note 12g)."
+            else if (cystFeat = "cyst-nc-multiple")
+                r.note := "Multiple cysts may indicate Langerhans cell histiocytosis (LCH) or lymphangioleiomyomatosis (LAM); consider dedicated evaluation (note 12h)."
+            return _LUR_Finalize(r, text, sMod)
+        }
         cystCat := cystFeat = "cyst-3"             ? "3"
                 : cystFeat = "cyst-4a-thick"        ? "4A"
                 : cystFeat = "cyst-4a-multi-base"   ? "4A"
@@ -609,6 +696,14 @@ _LUR_Classify(ntype, size, isBaseline, solidMm, text, isGrowing
             r := _LUR_Cat("4B", "Slow growth over multiple screenings without meeting >1.5 mm threshold (note 8)")
             r.baseCategory := base
         }
+    }
+    ; GGN slow growth goes the OTHER way: a GGN growing below the >1.5 mm
+    ; 12-month threshold stays Cat 2 per note 7 (only a >=30 mm GGN, which
+    ; sizes to Cat 3, needs the downgrade -- <30 mm is already Cat 2).
+    if (slowGrowth && ntype = "ggn" && r.category = "3") {
+        base := r.category
+        r := _LUR_Cat("2", "GGN growing over multiple screenings below the >1.5 mm / 12-mo threshold (note 7)")
+        r.baseCategory := base
     }
 
     return _LUR_Finalize(r, text, sMod)
@@ -739,9 +834,10 @@ _LUR_Finalize(r, text, sMod, isAirway := false) {
 
 _LUR_ApplyS(r, sMod) {
     if sMod {
-        ; Per note 15, S modifier may be added to categories 0-4.
-        ; Append "S" to the category label.
-        r.category := r.category . "S"
+        ; Per note 15, S modifier may be added to categories 0-4 -- a
+        ; not-classified result gets the advisory but no "S" suffix.
+        if (r.category != "NC")
+            r.category := r.category . "S"
         r.note := (r.note != "" ? r.note . " " : "")
             . "S modifier added: clinically significant non-lung-cancer finding. Management per ACR Incidental Findings recommendations."
     }
@@ -791,6 +887,9 @@ _LUR_BuildCatInfo() {
     m["4X"] := { descriptor: "Cat 3 or 4 with additional features suggesting malignancy (note 14)"
                , prevalence: "<1%"
                , management: "Chest CT with or without contrast, PET/CT, and/or tissue sampling; consider McWilliams assessment tool." }
+    m["NC"] := { descriptor: "Not classified in Lung-RADS"
+               , prevalence: "n/a"
+               , management: "Not classified or managed in Lung-RADS (v2022 notes 12a / 12g / 12h / 16). The exam's Lung-RADS category is determined by the most suspicious classified finding, if any." }
     return m
 }
 
@@ -806,6 +905,7 @@ _LUR_ScanFeatures(text) {
         ["segmental\s+consolid|lobar\s+consolid", "segmental / lobar consolidation"]
       , ["multiple\s+new\s+nodules|more\s+than\s+six\s+new\s+nodules|>?\s*6\s+new\s+nodules", "multiple new nodules"]
       , ["immunocompromised|immunosuppress", "immunocompromised context"]
+      , ["new\s+large\s+solid|large\s+solid\s+nodules?.{0,30}short\s+interval", "large solid nodule(s) >=8 mm appearing in a short interval"]
       , ["mucoid\s+impact", "mucoid impaction"]
       , ["bronchopneumon", "bronchopneumonia pattern"]
     ]

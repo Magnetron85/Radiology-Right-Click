@@ -271,10 +271,13 @@ SortSizes_Entry(input) {
 }
 
 _SortAllMeasurements(input) {
-    input := _SortPattern(input, "\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*", 3)
-    input := _SortPattern(input, "\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*", 3)
-    input := _SortPattern(input, "\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*",                       2)
-    input := _SortPattern(input, "\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*",                       2)
+    ; i) so a dictated uppercase "X" separator sorts too -- the smart-match
+    ; dispatcher matches case-insensitively, and whatever it suggests this
+    ; parser must be able to reorder. Output normalizes to lowercase "x".
+    input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*", 3)
+    input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*", 3)
+    input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*",                       2)
+    input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*",                       2)
     return input
 }
 

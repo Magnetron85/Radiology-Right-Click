@@ -1,11 +1,13 @@
-# v2.1 -> v2.1.1 changes
+# v2.1 -> v2.1.2 changes
 
 ## Smart match: suggested calculators from the highlighted text
 
 - The context menu now **pins a "Suggested" section at the top** with the 1-3 calculators that best match the highlighted text, each tagged "strong" or "possible". The radiologist highlights a finding, right-clicks, and the relevant tool is right there -- but the tool **never auto-runs**: the best match is shown as the bold default and a single click launches it (per design, nothing executes without confirmation). When several tools plausibly apply (e.g. "adrenal" -> Adrenal Washout + Incidental Adrenal; "thyroid nodule" -> TI-RADS + Incidental Thyroid), they all surface so the user picks.
 - Scoring (`lib/Dispatch.ahk`) is transparent and regex-based: each calculator declares **entity** terms (distinctive anatomy/diagnosis, high weight), **feature** terms (supporting descriptors), and **data** shapes (measurements, dates). A bare measurement like "3 x 2 x 1 cm" stays low-confidence and surfaces the volume tools -- it does **not** confidently jump to a neuro calculator.
 - **Deliberately not edit-distance (Levenshtein).** Short medical terms have clinically different near-neighbours ("renal" vs "adrenal"), so blanket fuzzy matching would produce confident wrong suggestions. Speech-recognition variability is instead absorbed by curated alternations in the patterns (split words like "hypo echoic", dotted "I.P.M.N.", optional hyphens/spaces, known misrecognitions). Verified: "renal cyst" matches Bosniak and never adrenal.
-- Toggle "Suggest the best-matching calculator(s) from the highlighted text" in Preferences (on by default). New permutation suite `tests/test_dispatch.ahk` (38 cases) covers every calculator's signature plus the ambiguity, overlap, SR-variant, and safety cases.
+- **Sort Measurement Sizes is now suggested** when the highlighted text contains a sortable measurement shape -- "A x B x C" or "A, B, C" (decimals fine, spaces optional). The signature deliberately mirrors what the sort parser can actually reorder, so a suggestion never leads to a silent no-op; for the same reason the parser now also accepts an uppercase "X" separator (output still normalizes to lowercase "x").
+- Toggle "Suggest the best-matching calculator(s) from the highlighted text" in Preferences (on by default). New permutation suite `tests/test_dispatch.ahk` (62 cases) covers every calculator's signature plus the ambiguity, overlap, SR-variant, and safety cases.
+- **Common real-report phrasings now match.** The single most frequent lung highlight -- "6 mm nodule in the right upper lobe" / "RLL nodule" / "nodule in the left lung" -- never says "pulmonary nodule" and previously scored zero; a lung-specific location heuristic (upper/middle/lower lobe, RUL-LLL, lingula -- terms that don't exist in liver or thyroid, so "nodule in the right hepatic lobe" stays unmatched) now routes it to Fleischner and Lung-RADS. Also added: "ovary / ovaries / adnexa" word forms (O-RADS), "renal cystic lesion" and "cystic lesion in the ... kidney" (Bosniak), "cystic lesion in the pancreas" and "side-branch" (Kyoto IPMN), "hepatic/liver lesion-mass-nodule" (LI-RADS), "fatty liver" (steatosis), "T2*" (liver iron), "CAC" (calcium score), "IPH" (ICH volume), "Benadryl / diphenhydramine" (premedication), "EGA / EDC / CRL / crown-rump" (pregnancy dates), and "APW / RPW" (adrenal washout).
 
 ## Cleaner Preferences window
 
@@ -61,6 +63,17 @@
 - Per-module parenthetical fragments added: Ellipsoid/Bullet volume, PSA density, adrenal washout, thymus chemical shift, hepatic fat fraction, liver iron (LIC), calcium score percentile, NASCET, statistics, range, and measurement comparison.
 - New pref `clipboard.includeSelection` (default `true`); set `false` in `preferences.json` to restore the old result-only clipboard.
 - "Copy impression" still copies the result alone; "Copy with methodology" unchanged.
+
+## Lung-RADS: every v2022 note is now reachable from the dialog
+
+- **Exam-level states (notes 9 / 16)**: new checkboxes for "Awaiting prior exams" (-> Cat 0, temporary until the comparison arrives) and "Known lung cancer diagnosis" (-> not classified; imaging is staging, no longer screening).
+- **All four note-10a infectious/inflammatory triggers** are selectable from one dropdown (segmental/lobar consolidation, >6 new nodules, new large solid nodule(s) >=8 mm in a short interval, new nodules in an immunocompromised patient) -- previously only the first two existed, as checkboxes. Any selection routes to Cat 0 with the 1-3 month LDCT recommendation.
+- **Airway options complete (note 11)**: added "subsegmental and/or multiple tubular, favors infection" (-> Cat 0, note 11b) and "segmental or more proximal containing air, favors secretions" (-> Cat 2, note 11c) alongside the existing 11a/11d rows.
+- **Not-classified cyst rows (notes 12a / 12g / 12h)**: thin-walled, fluid-containing, and multiple cysts (LCH / LAM) are selectable and report "not classified in Lung-RADS" instead of forcing a numbered category; a new checkbox flags a **cyst with an associated nodule (note 12e)** and advises classifying the nodule under its own lesion type and acting on the higher category.
+- **GGN slow growth fixed (note 7)**: a >=30 mm GGN growing below the >1.5 mm/12-mo threshold across multiple screenings now correctly stays Cat 2 (it previously returned Cat 3); the Behavior option label spells out the note 8 (solid -> 4B) vs note 7 (GGN -> 2) split.
+- **Methodology block now cites the bookkeeping notes**: practice-audit designation (note 3: negative screen = 1-2, positive = 3-4, with the "negative does not exclude cancer" caveat), coding rule (note 1), and measurement technique (note 4).
+- S modifier on a not-classified result adds the advisory without a bogus "NCS" label (note 15 limits S to categories 0-4).
+- Classifier permutation suite extended 73 -> 85 cases (`tests/test_lungrads_68.ahk`), covering every new pathway; GUI smoke test still green (the note-10 dropdown consolidation keeps the tallest form configuration inside the work area).
 
 ## Bug fixes
 

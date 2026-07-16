@@ -106,6 +106,14 @@ _DispatchBuildSignatures() {
     global _DISP_3D, _DISP_DATE, _DISP_NLIST
     m := Map()
 
+    ; Lung-specific location terms: upper/middle/lower lobes and the lobe
+    ; abbreviations only exist in the lung (liver and thyroid lobes are
+    ; bare right/left), so "nodule" near one of these is a LUNG nodule --
+    ; the most common phrasing radiologists highlight ("6 mm nodule in the
+    ; right upper lobe") never says the words "pulmonary nodule".
+    lobe := "(?:R[UML]L\b|L[UL]L\b|lingula|(?:right|left)\s+(?:upper|middle|lower)\s+lobe|(?:right|left)\s+lung\b)"
+    lungNod := "\bnodules?\b[^.\r\n]{0,80}\b" lobe "|\b" lobe "[^.\r\n]{0,80}\bnodules?"
+
     ; ---- measurement / volume (low confidence by design; no entity) ----
     m["CalculateEllipsoidVolume"] := [
         [_DISP_3D, 2, "three dimensions"],
@@ -120,6 +128,12 @@ _DispatchBuildSignatures() {
         ["\b(?:previous(?:ly)?|prior|interval|compared\s+to)\b", 5, "prior comparison"],
         ["\b(?:now|current(?:ly)?|increased|decreased|enlarg)\b", 2, "interval change"],
         [_DISP_DATE, 1, "date"]]
+    ; Patterns mirror what SortSizes_Entry can actually reorder ("A x B x C"
+    ; and "A, B, C") rather than reusing _DISP_3D, whose ×/* separators the
+    ; sort parser does not handle -- a suggestion must never lead to a no-op.
+    m["SortNoduleSizes"] := [
+        ["\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?", 2, "three dimensions"],
+        ["\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?", 2, "comma-separated sizes"]]
 
     ; ---- prostate ----
     m["CalculatePSADensity"] := [
@@ -135,17 +149,18 @@ _DispatchBuildSignatures() {
     ; ---- adnexal / OB-GYN ----
     m["CalculatePregnancyDates"] := [
         ["\bLMP\b|\blast\s+menstrual\b", 5, "LMP"],
-        ["\bgestational\s+age\b|\bGA\b|\bEDD\b|\bpregnan", 5, "gestational age"],
+        ["\bgestational\s+age\b|\bGA\b|\bEGA\b|\bEDD\b|\bEDC\b|\bpregnan", 5, "gestational age"],
+        ["\bcrown[- ]?rump\b|\bCRL\b", 3, "crown-rump length"],
         ["\bweeks?\b.*\bdays?\b", 1, "weeks/days"]]
     m["CalculateMenstrualPhase"] := [
         ["\bmenstrual\s+phase\b|\bcycle\s+day\b|\bendometri", 5, "menstrual phase"],
         ["\bLMP\b|\blast\s+menstrual\b", 3, "LMP"]]
     m["CalculateORADSMRI"] := [
-        ["\b(?:adnexal|ovarian)\b", 5, "adnexal/ovarian"],
+        ["\badnex\w*\b|\bovar(?:y|ies|ian)\b", 5, "adnexal/ovarian"],
         ["\bMRI?\b|\bDCE\b|\btime[- ]?intensity\b|\bTIC\b", 2, "MRI"],
         ["\bO-?RADS\b", 2, "O-RADS"]]
     m["CalculateORADSUS"] := [
-        ["\b(?:adnexal|ovarian)\b", 5, "adnexal/ovarian"],
+        ["\badnex\w*\b|\bovar(?:y|ies|ian)\b", 5, "adnexal/ovarian"],
         ["\b(?:ultrasound|sonograph|US)\b", 2, "ultrasound"],
         ["\b(?:uni|multi)locular\b|\bpapillary\s+projection\b", 2, "cyst morphology"],
         ["\bO-?RADS\b", 2, "O-RADS"]]
@@ -153,7 +168,7 @@ _DispatchBuildSignatures() {
     ; ---- adrenal ----
     m["CalculateAdrenalWashout"] := [
         ["\badrenal\b", 5, "adrenal"],
-        ["\bwashout\b", 3, "washout"],
+        ["\bwashout\b|\bAPW\b|\bRPW\b", 3, "washout"],
         ["\bHU\b|\bhounsfield\b", 2, "HU"],
         ["\b(?:un|non[- ]?)enhanced\b|\bdelayed\b|\bportal\s+venous\b", 1, "CT phase"]]
     m["CalculateIncidentalAdrenal"] := [
@@ -177,45 +192,47 @@ _DispatchBuildSignatures() {
     ; ---- liver / biliary ----
     m["CalculateLIRADS"] := [
         ["\bLI-?RADS\b", 5, "LI-RADS"],
-        ["\bhepatic\s+observation\b|\bHCC\b|\bcirrho", 5, "hepatic observation"],
+        ["\bhepatic\s+observation\b|\bHCC\b|\bcirrho|\b(?:hepatic|liver)\s+(?:lesion|mass|nodule)\b", 5, "hepatic observation"],
         ["\bAPHE\b|\barterial\s+phase\s+hyper|\bwashout\b|\bcapsule\b", 2, "major feature"]]
     m["CalculateUSLIRADS"] := [
         ["\bUS\s+LI-?RADS\b|\bvisualization\s+score\b", 5, "US LI-RADS"],
         ["\b(?:hepatic|liver)\b.*\b(?:ultrasound|sonograph|surveillance)\b", 5, "liver US surveillance"]]
     m["CalculateHepaticSteatosis"] := [
-        ["\bhepatic\s+steatosis\b|\bliver\s+fat\b|\bfat\s+fraction\b|\bsteato", 5, "hepatic steatosis"],
+        ["\bhepatic\s+steatosis\b|\b(?:liver|hepatic)\s+fat\b|\bfat\s+fraction\b|\bsteato|\bfatty\s+(?:liver|infiltrat)", 5, "hepatic steatosis"],
         ["\b(?:in|out)[- ]?of?[- ]?phase\b|\bDixon\b", 2, "in/out-of-phase"]]
     m["CalculateIronContent"] := [
         ["\b(?:liver\s+)?iron\b|\bhemochromatos|\bhemosideros|\bLIC\b", 5, "liver iron"],
-        ["\bR2\*?\b", 3, "R2*"]]
+        ["\bR2\s*\*|\bT2\s*\*", 3, "R2*/T2*"]]
     m["CalculateGBPolyp"] := [
         ["\bgallbladder\s+polyp\b|\bGB\s+polyp\b|\bgallbladder\b", 5, "gallbladder polyp"]]
 
     ; ---- pancreas ----
     m["CalculateKyotoIPMN"] := [
         ["\bIPMN\b|\bI\.P\.M\.N\b", 5, "IPMN"],
-        ["\bpancreatic\s+cyst\b|\bmain\s+pancreatic\s+duct\b|\bMPD\b", 5, "pancreatic cyst/MPD"],
-        ["\bmural\s+nodule\b|\bbranch[- ]?duct\b|\bmain[- ]?duct\b", 2, "duct feature"]]
+        ["\bpancreatic\s+cyst|\bmain\s+pancreatic\s+duct\b|\bMPD\b|\bpancrea\w*\b[^.\r\n]{0,40}\bcyst|\bcyst\w*\b[^.\r\n]{0,40}\bpancrea", 5, "pancreatic cyst/MPD"],
+        ["\bmural\s+nodule\b|\bbranch[- ]?duct\b|\bmain[- ]?duct\b|\bside[- ]?branch\b", 2, "duct feature"]]
 
     ; ---- renal ----
     m["CalculateBosniak"] := [
         ["\bbosniak\b", 5, "Bosniak"],
-        ["\b(?:renal|kidney)\s+cyst\b|\bcystic\s+renal\b", 5, "renal cyst"],
+        ; No trailing \b after "cyst" so "renal cystic lesion" matches too;
+        ; the proximity branches catch "cystic lesion in the left kidney".
+        ["\b(?:renal|kidney)\s+cyst|\bcystic\s+(?:renal|kidney)|\bcyst\w*\b[^.\r\n]{0,40}\bkidney|\bkidney\b[^.\r\n]{0,40}\bcyst", 5, "renal cyst"],
         ["\bsepta(?:tion)?\b|\bwall\s+enhanc", 2, "septa/wall"]]
 
     ; ---- lung ----
     m["CalculateFleischnerCriteria"] := [
         ["\bfleischner\b", 5, "Fleischner"],
-        ["\bpulmonary\s+nodule\b|\blung\s+nodule\b", 5, "pulmonary nodule"],
-        ["\bground[- ]?glass\b|\bGGN\b|\bpart[- ]?solid\b|\bsolid\s+nodule\b", 2, "nodule type"]]
+        ["\bpulmonary\s+nodule\b|\blung\s+nodule\b|" lungNod, 5, "pulmonary nodule"],
+        ["\bground[- ]?glass\b|\bGGN\b|\bpart[- ]?solid\b|\bsolid\s+nodule\b|\bperifissural\b|\bsubpleural\b", 2, "nodule type"]]
     m["CalculateLungRADS"] := [
         ["\blung-?rads\b", 5, "Lung-RADS"],
         ["\b(?:lung\s+(?:cancer\s+)?screening|LDCT|low[- ]?dose\s+CT)\b", 5, "lung screening"],
-        ["\bpulmonary\s+nodule\b|\blung\s+nodule\b", 3, "pulmonary nodule"]]
+        ["\bpulmonary\s+nodule\b|\blung\s+nodule\b|" lungNod, 3, "pulmonary nodule"]]
 
     ; ---- cardiovascular ----
     m["CalculateCalciumScorePercentile"] := [
-        ["\bcalcium\s+score\b|\bagatston\b|\bcoronary\s+(?:artery\s+)?calci", 5, "calcium score"],
+        ["\bcalcium\s+score\b|\bagatston\b|\bcoronary\s+(?:artery\s+)?calci|\bCAC\b", 5, "calcium score"],
         ["\bMESA\b|\bpercentile\b", 2, "percentile"]]
     m["CalculateRVLV"] := [
         ["\bRV\s*[:/]\s*LV\b|\bRV/LV\b", 5, "RV/LV"],
@@ -228,7 +245,7 @@ _DispatchBuildSignatures() {
         ["\bcarotid\b|\bICA\b", 5, "carotid"],
         ["\bstenos", 2, "stenosis"]]
     m["CalculateICHVolume"] := [
-        ["\bintra(?:cerebral|parenchymal)\s+h(?:a?emorrhage)?\b|\bICH\b|\bhematoma\b|\bABC/2\b", 5, "intracerebral hemorrhage"],
+        ["\bintra(?:cerebral|parenchymal)\s+h(?:a?emorrhage)?\b|\bICH\b|\bIPH\b|\bhematoma\b|\bABC/2\b", 5, "intracerebral hemorrhage"],
         [_DISP_3D, 1, "three dimensions"]]
 
     ; ---- numeric ----
@@ -241,7 +258,7 @@ _DispatchBuildSignatures() {
 
     ; ---- scheduling ----
     m["CalculateContrastPremedication"] := [
-        ["\bpremedicat|\bcontrast\s+allerg|\bprednisone\b|\bmethylprednisolone\b|\bsteroid\s+prep", 5, "contrast premedication"]]
+        ["\bpremedicat|\bcontrast\s+allerg|\bprednisone\b|\bmethylprednisolone\b|\bsteroid\s+prep|\bdiphenhydramine\b|\bbenadryl\b", 5, "contrast premedication"]]
     m["CalculateFollowUpDate"] := [
         ["\bfollow[- ]?up\b.*\b\d+\s*(?:day|week|month|year)s?\b", 5, "follow-up interval"],
         ["\b\d+\s*(?:month|week|year)s?\b.*\bfollow[- ]?up\b", 5, "follow-up interval"],
