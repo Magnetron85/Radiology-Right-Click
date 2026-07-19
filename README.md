@@ -215,7 +215,7 @@ Interpretation: Normal iron content (<1.8 mg Fe/g).
 ### Cardiovascular
 
 #### Calculate Calcium Score Percentile
-Age- and sex-stratified percentile lookup against Hoff 2001 (35,246 adults, electron-beam CT). Also reports arterial age from the MESA equation (McClelland 2009: arterial age = 39.1 + 7.25·ln(Agatston+1)). Valid for ages ≥30.
+Age- and sex-stratified percentile against Hoff 2001 (35,246 adults, electron-beam CT). When race is supplied (ages 45–84) it additionally reports the race-stratified **MESA** percentile (McClelland 2006). Rather than bucketing the paper's bracket-midpoint table, this evaluates the MESA reference model per integer age × sex × race, with log-linear interpolation across score — so a patient is scored at their actual age instead of the bracket midpoint (e.g. white male, age 46, Agatston 45 → 89th, not the old bracket-midpoint 75th). Also reports arterial age (McClelland 2009: 39.1 + 7.25·ln(Agatston+1)). Valid for ages ≥30 (MESA portion 45–84).
 
 Selected text:
 ```
