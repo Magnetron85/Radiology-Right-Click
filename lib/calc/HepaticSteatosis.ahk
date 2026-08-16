@@ -1,8 +1,9 @@
 ; ============================================================
 ; lib/calc/HepaticSteatosis.ahk
 ; ------------------------------------------------------------
-; Reference: Sirlin CB. Invited Commentary on Image-based
-; quantification of hepatic fat. Radiographics 2009;29:1277-80.
+; Grading: Guglielmo FF et al. RadioGraphics 2023;43(6):e220181
+; (Table 4, rounded from Tang A et al. Radiology 2013;267:422-431).
+; Spleen normalization: Sirlin CB. Radiographics 2009;29:1277-80.
 ; ============================================================
 
 #Requires AutoHotkey v2.0
@@ -51,7 +52,9 @@ HepaticSteatosis_OnSubmit(v, form := "") {
                             error: "Zero liver IP" })
 
     fatFraction := 100 * (liverIP - liverOP) / (2 * liverIP)
-    grade := _InterpretSteatosis(fatFraction)
+    ; Grade the same 1-decimal value the user sees, so a displayed "6.0%"
+    ; can never carry a "below the 6% threshold" interpretation.
+    grade := _InterpretSteatosis(Round(fatFraction, 1))
     gradeShort := RegExReplace(grade, "^Interpretation:\s*", "")
     gradeShort := RegExReplace(gradeShort, "\.$", "")
 
@@ -79,6 +82,9 @@ HepaticSteatosis_OnSubmit(v, form := "") {
     method .= "`n" grade
 
     advisories := []
+    borderNote := _SteatosisBorderlineNote(Round(fatFraction, 1))
+    if (borderNote != "")
+        advisories.Push(borderNote)
     advisories.Push("Dixon IP/OP fat fraction approximates PDFF only at low fat content. "
                   . "Quantify with PDFF (CSE-MRI) when available.")
     if (spleenFF != "")
@@ -96,6 +102,10 @@ HepaticSteatosis_OnSubmit(v, form := "") {
                                 . "and Fat Evaluation with US: A Practical Guide for Radiologists. "
                                 . "Radiographics. 2023;43(6):e220181.",
                            url:  "https://pubs.rsna.org/doi/10.1148/rg.220181" },
+                         { text: "Tang A, Tan J, Sun M, et al. Nonalcoholic fatty liver disease: "
+                                . "MR imaging of liver proton density fat fraction to assess "
+                                . "hepatic steatosis. Radiology. 2013;267(2):422-431.",
+                           url:  "https://doi.org/10.1148/radiol.12120896" },
                          { text: "Sirlin CB. Invited Commentary on Image-based quantification of "
                                 . "hepatic fat. Radiographics. 2009;29:1277-1280.",
                            url:  "https://doi.org/10.1148/027153330290051277" }],
@@ -124,7 +134,11 @@ CalcHepaticSteatosis(input) {
     ; when available).
     fatFraction := 100 * (liverIP - liverOP) / (2 * liverIP)
     out := input " (Fat Fraction: " Round(fatFraction, 1) "%)"
-    out .= "`n`nFat Fraction " _InterpretSteatosis(fatFraction)
+    ; Grade the same 1-decimal value that is displayed (see the form path).
+    out .= "`n`nFat Fraction " _InterpretSteatosis(Round(fatFraction, 1))
+    borderNote := _SteatosisBorderlineNote(Round(fatFraction, 1))
+    if (borderNote != "")
+        out .= "`nNote: " borderNote
     out .= "`nNote: Dixon IP/OP fat fraction approximates PDFF only at low fat content. Quantify with PDFF (CSE-MRI) when available.`n"
 
     if RegExMatch(input, spleenNeedle, &sm) {
@@ -137,26 +151,55 @@ CalcHepaticSteatosis(input) {
             ffTag := "Fat Fraction: " Round(fatFraction, 1) "%)"
             out := StrReplace(out, ffTag
                  , "Fat Fraction: " Round(fatFraction, 1) "%, Spleen-normalized FF: " Round(fatPct, 1) "%)",, , 1)
-            out .= "Spleen-normalized FF " _InterpretSteatosis(fatPct)
+            out .= "Spleen-normalized FF " _InterpretSteatosis(Round(fatPct, 1))
+            ; The spleen-normalized FF can land in the borderline band when
+            ; the primary FF did not; a borderline verdict must never appear
+            ; without its explanation (and the note is never printed twice).
+            if (borderNote = "") {
+                spleenNote := _SteatosisBorderlineNote(Round(fatPct, 1))
+                if (spleenNote != "")
+                    out .= "`nNote: " spleenNote
+            }
             out .= "`nNote: spleen-normalized fat fraction is an older approximation (Sirlin 2009) not endorsed by Guglielmo 2023; use as a sanity check, not as the primary metric.`n"
         }
     }
 
     if showCit {
         out .= "`n`nCitation 1: Guglielmo FF, Barr RG, Yokoo T, et al. Liver Fibrosis, Fat, and Iron Evaluation with MRI and Fibrosis and Fat Evaluation with US: A Practical Guide for the Radiologist. RadioGraphics 2023;43(6):e220181."
-        out .= "`nCitation 2: Sirlin CB. Invited Commentary on Image-based quantification of hepatic fat: methods and clinical applications. Radiographics 2009;29:1277-80.`n"
+        out .= "`nCitation 2: Tang A, Tan J, Sun M, et al. Nonalcoholic fatty liver disease: MR imaging of liver proton density fat fraction to assess hepatic steatosis. Radiology 2013;267(2):422-431."
+        out .= "`nCitation 3: Sirlin CB. Invited Commentary on Image-based quantification of hepatic fat: methods and clinical applications. Radiographics 2009;29:1277-80.`n"
     }
     return out
 }
 
 _InterpretSteatosis(ff) {
-    ; Thresholds per Guglielmo et al., SAR consensus 2023 (Table 4):
+    ; Grading bands per Guglielmo et al., RadioGraphics 2023 (Table 4) -- the
+    ; integer-rounded adaptation of the histology-calibrated Tang 2013
+    ; thresholds (6.4% / 17.4% / 22.1%):
     ;   <6%  Normal | 6-17% Mild (G1) | 17-22% Moderate (G2) | >22% Severe (G3).
-    if (ff < 6)
+    ; The 5-6% band is genuinely contested: the common DIAGNOSTIC cutoffs sit
+    ; at PDFF >=5% (MASLD trial / FDA convention; 5.56% by MRS in the Dallas
+    ; Heart Study, Szczepaniak 2005) -- below the grade 1 threshold. Values
+    ; there are reported as borderline rather than "no steatosis": with a
+    ; two-point Dixon approximation a sub-1% margin cannot settle the call.
+    if (ff < 5)
         return "Interpretation: No significant hepatic steatosis."
+    if (ff < 6)
+        return "Interpretation: Borderline hepatic steatosis (meets the 5% diagnostic threshold; below the 6% Grade 1 threshold)."
     if (ff < 17)
         return "Interpretation: Mild hepatic steatosis (Grade 1)."
     if (ff <= 22)
         return "Interpretation: Moderate hepatic steatosis (Grade 2)."
     return "Interpretation: Severe hepatic steatosis (Grade 3)."
+}
+
+; One-line explanation of the contested 5-6% band, shared by the form
+; (advisory) and legacy (Note:) output paths. Empty outside the band.
+_SteatosisBorderlineNote(ff) {
+    if (ff < 5 || ff >= 6)
+        return ""
+    return "Fat fractions of 5-6% meet common diagnostic cutoffs for steatosis "
+         . "(PDFF >=5% in MASLD trials; 5.56% by MRS, Dallas Heart Study) but fall "
+         . "below the histology-calibrated Grade 1 threshold (6% per Guglielmo 2023 "
+         . "Table 4, rounded from 6.4% per Tang 2013). Correlate clinically."
 }

@@ -1,3 +1,12 @@
+# v2.1.4 changes
+
+## Fixes
+
+- **Sort Measurement Sizes is never crowded out of the suggestions.** It scores as a low-weight data shape by design, so entity-rich selections ("prostate size: 4.5 x 5.6 x 7.6 cm / PSA: 5.6", "nodule measuring ... in the liver") pushed it below the 3-suggestion cutoff and the user had to walk the menu tree. It is now appended as a 4th suggestion whenever the selection contains a shape the sorter can reorder. Two-dimension "A x B" measurements also trigger the suggestion when followed by a cm/mm unit (so matrix sizes "256 x 512" and dosages "2 x 20 mg" don't); comma pairs deliberately never do ("May 3, 2026" would false-positive everywhere).
+- **The sorter can no longer rewrite textual dates.** The bare comma-pair pass now requires 1-3 integer digits per number, so accepting Sort on a selection containing "... May 3, 2026" leaves the date untouched instead of pasting back "May 2026 x 3". And when everything is already largest-first, Sort shows a brief "already sorted" tooltip instead of doing nothing silently.
+- **PSA density no longer duplicates the PSA in the paste-ready text.** The impression restated the input ("PSA 5.6 ng/mL, ..."), so pasting after a highlighted "prostate size + PSA" selection repeated the PSA line. The impression and paste fragment now carry the derived values -- "PSA density 0.06 ng/mL/cc (prostate volume 100.3 cc, ellipsoid formula)." -- restating the PSA only when the selection doesn't already contain it (e.g. launched from the menu with nothing selected), so the pasted sentence always stands alone; a user-supplied volume is likewise not restated.
+- **Hepatic steatosis 5-6% is reported as borderline, not "no significant steatosis."** The grading bands (<6 normal / 6-17 G1 / 17-22 G2 / >22 G3) faithfully follow Guglielmo 2023 Table 4 (rounded from the histology-calibrated Tang 2013 thresholds 6.4/17.4/22.1%), but the common *diagnostic* cutoffs sit lower (PDFF >=5% in MASLD trials/FDA guidance; 5.56% by MRS, Dallas Heart Study) -- and Guglielmo 2023 itself concedes there is "no clear consensus" separating normal from abnormal. A 5.6% fat fraction now reads "Borderline hepatic steatosis (meets the 5% diagnostic threshold; below the 6% Grade 1 threshold)" with an explanatory note; Tang 2013 added to the citations. Verified against the published Table 4 and the Tang/Szczepaniak primary sources.
+
 # v2.1 -> v2.1.2 changes
 
 ## Smart match: suggested calculators from the highlighted text

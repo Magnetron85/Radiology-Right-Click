@@ -247,8 +247,15 @@ SortSizes_Entry(input) {
     g_LastSelectedText := ""
 
     processed := _SortAllMeasurements(input)
-    if (processed = input)
+    if (processed = input) {
+        ; Not silent: the smart-match menu can suggest Sort for a measurement
+        ; that is already largest-first, and a wordless return would be
+        ; indistinguishable from a failure. A transient tooltip gives feedback
+        ; without opening a result window or touching the clipboard.
+        ToolTip("Already sorted (largest first) -- nothing to change.")
+        SetTimer((*) => ToolTip(), -1500)
         return ""
+    }
     leading  := (SubStr(input, 1, 1) = " ") ? " " : ""
     trailing := (SubStr(input, -1) = " ")   ? " " : ""
 
@@ -276,7 +283,10 @@ _SortAllMeasurements(input) {
     ; parser must be able to reorder. Output normalizes to lowercase "x".
     input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*", 3)
     input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*", 3)
-    input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*",                       2)
+    ; Bare comma PAIRS are capped at 1-3 integer digits so textual dates
+    ; ("May 3, 2026") and other large-number enumerations are never rewritten
+    ; into "2026 x 3" -- real cm/mm measurements don't have 4-digit values.
+    input := _SortPattern(input, "i)\s*(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*,\s*(\d{1,3}(?:\.\d+)?)(?![\d.])\s*", 2)
     input := _SortPattern(input, "i)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*",                       2)
     return input
 }

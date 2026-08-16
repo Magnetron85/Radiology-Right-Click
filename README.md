@@ -181,9 +181,9 @@ Thymus Signal Intensity Index (SII): 20.00% (hyperplasia > 8.92)
 plus the interpretation and citation. Single-tissue input (thymus IP+OP only, no paraspinous) is also accepted and reports SII alone.
 
 #### Calculate Hepatic Steatosis
-Two-point Dixon fat fraction. Liver IP + OP only gives the standard fat fraction; if spleen IP + OP are also provided, also reports the spleen-normalized fat percentage. Bands: <5 % none, 5–15 % mild, 15–30 % moderate, ≥30 % severe.
+Two-point Dixon fat fraction. Liver IP + OP only gives the standard fat fraction; if spleen IP + OP are also provided, also reports the spleen-normalized fat fraction. Grading bands follow Guglielmo 2023 (Table 4, rounded from Tang 2013): <5 % none, 5–6 % borderline (meets the ≥5 % diagnostic cutoff — 5.56 % by MRS, Dallas Heart Study — but below the 6 % Grade 1 threshold), 6–17 % mild (Grade 1), 17–22 % moderate (Grade 2), >22 % severe (Grade 3).
 
-Reference: Sirlin CB. *Radiographics* 2009;29:1277–80.
+References: Guglielmo FF et al. *RadioGraphics* 2023;43(6):e220181; Tang A et al. *Radiology* 2013;267:422–431; Sirlin CB. *Radiographics* 2009;29:1277–80 (spleen normalization).
 
 Selected text:
 ```
@@ -191,9 +191,9 @@ Liver IP: 100, OP: 80, Spleen IP: 90, OP: 88
 ```
 Result popup includes:
 ```
-Liver IP: 100, OP: 80, Spleen IP: 90, OP: 88 (Fat Fraction: 10.0%, Fat Percentage: 9.1%)
-Fat Fraction Interpretation: Mild hepatic steatosis.
-Fat Percentage Interpretation: Mild hepatic steatosis.
+Liver IP: 100, OP: 80, Spleen IP: 90, OP: 88 (Fat Fraction: 10.0%, Spleen-normalized FF: 9.1%)
+Fat Fraction Interpretation: Mild hepatic steatosis (Grade 1).
+Spleen-normalized FF Interpretation: Mild hepatic steatosis (Grade 1).
 ```
 
 #### MRI Liver Iron Content

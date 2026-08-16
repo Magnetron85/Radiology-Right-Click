@@ -88,11 +88,8 @@ PSADensity_OnSubmit(v, form := "") {
                             error: "Missing volume / dimensions" })
     body := CalcPSADensity(synth)
 
-    ; Extract psa, volume, density values out of the raw body for an
+    ; Extract volume and density values out of the raw body for an
     ; impression-ready sentence; preserve the full body in methodology.
-    psaVal := ""
-    if RegExMatch(body, "i)PSA[:]?\s*(\d+(?:\.\d+)?)", &m)
-        psaVal := m[1]
     volVal := ""
     volMethod := ""
     if RegExMatch(body, "i)Prostate volume[:]?\s*([\d.]+)\s*cc\s*\(([^)]+)\)", &m) {
@@ -106,16 +103,36 @@ PSADensity_OnSubmit(v, form := "") {
     if RegExMatch(body, "i)PSA Density[:]?\s*([\d.]+)", &m)
         densVal := m[1]
 
-    if (psaVal != "" && densVal != "") {
-        impression := "PSA " psaVal " ng/mL"
-        if (volVal != "")
-            impression .= ", prostate volume " volVal " cc"
-                       . (volMethod != "" ? " (" StrLower(volMethod) ")" : "")
+    ; The impression leads with the DERIVED values. Inputs the highlighted
+    ; selection already states are NOT restated -- the paste composition
+    ; appends the impression right after the user's own selection, so
+    ; repeating them reads as duplication ("PSA: 5.6 / PSA 5.6 ng/mL ...").
+    ; A computed volume IS new information, so it stays; the PSA is included
+    ; only when the selection doesn't carry it (e.g. launched from the menu
+    ; with no selection and typed into the form) so the sentence still
+    ; stands alone. A user-supplied volume is an input, never restated.
+    pasteFrag := ""
+    if (densVal != "") {
         ; ng/mL/cc is the clinical-convention unit for PSA density (also
         ; written ng/mL^2 or ng/mL/cm^3); we keep "cc" rather than the
         ; style-guide-default "mL" because PSA density is conventionally
         ; reported this way -- 1 cc == 1 mL but the form is universal.
-        impression .= "; PSA density " densVal " ng/mL/cc."
+        densPart := "PSA density " densVal " ng/mL/cc"
+        volPart  := (volVal != "" && volMethod != "")
+                  ? "prostate volume " volVal " cc" : ""
+        selHasPSA := RegExMatch(g_LastSelectedText
+                   , "i)PSA\D{0,20}" StrReplace(v.PSA, ".", "\."))
+        psaPart := selHasPSA ? "" : "PSA " v.PSA " ng/mL"
+
+        impression := (psaPart != "" ? psaPart ", " : "") . densPart
+        if (volPart != "")
+            impression .= " (" volPart ", "
+                       . RegExReplace(StrLower(volMethod), "\s*volume$", "") " formula)"
+        impression .= "."
+
+        ; Short parenthetical fragment: lowercase-compatible, no period.
+        pasteFrag := (psaPart != "" ? psaPart ", " : "")
+                   . (volPart != "" ? volPart ", " : "") . densPart
     } else {
         impression := body
     }
@@ -132,7 +149,7 @@ PSADensity_OnSubmit(v, form := "") {
         methodology:    method,
         citations:      [],
         echo:           g_LastSelectedText,
-        paste:          densVal != "" ? "PSA density " densVal " ng/mL/cc" : "",
+        paste:          pasteFrag,
         pasteMode:      ""   ; paren after a single-line selection; newline otherwise
     })
 }

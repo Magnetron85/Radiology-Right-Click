@@ -33,9 +33,10 @@
 #Requires AutoHotkey v2.0
 #Include Util.ahk
 
-; Return up to 3 ranked suggestions for `text`:
+; Return the ranked suggestions for `text`:
 ;   [{ cmd, score, tier, why:[terms] }, ...]   (highest score first)
-; Empty array when nothing scores at the threshold.
+; Up to 3 by score, plus Sort Measurement Sizes appended as a 4th when it
+; matched but was outranked. Empty array when nothing scores at threshold.
 MatchCalculators(text) {
     if (Trim(text) = "")
         return []
@@ -60,11 +61,21 @@ MatchCalculators(text) {
     }
 
     results := _DispatchSortByScore(results)
+    ; Top 3 by score, with one exception: Sort Measurement Sizes is a
+    ; transform, not a differential diagnosis -- whenever the selection
+    ; contains a shape it can reorder it is applicable, but its low
+    ; data-shape score lets entity-rich context ("prostate ...", "... in
+    ; the liver") push it below rank 3, and the whole point of the suggested
+    ; section is sparing the user the walk through the menu tree. When
+    ; outranked it is appended as a fourth suggestion instead of dropped.
     out := []
     for i, r in results {
-        if (i > 3)
+        if (i <= 3)
+            out.Push(r)
+        else if (r.cmd = "SortNoduleSizes") {
+            out.Push(r)
             break
-        out.Push(r)
+        }
     }
     return out
 }
@@ -128,11 +139,17 @@ _DispatchBuildSignatures() {
         ["\b(?:previous(?:ly)?|prior|interval|compared\s+to)\b", 5, "prior comparison"],
         ["\b(?:now|current(?:ly)?|increased|decreased|enlarg)\b", 2, "interval change"],
         [_DISP_DATE, 1, "date"]]
-    ; Patterns mirror what SortSizes_Entry can actually reorder ("A x B x C"
-    ; and "A, B, C") rather than reusing _DISP_3D, whose ×/* separators the
-    ; sort parser does not handle -- a suggestion must never lead to a no-op.
+    ; Patterns mirror what SortSizes_Entry can actually reorder ("A x B x C",
+    ; "A, B, C", and 2D "A x B") rather than reusing _DISP_3D, whose ×/*
+    ; separators the sort parser does not handle -- a suggestion must never
+    ; lead to text the sorter cannot parse. The pair-or-triple alternation is
+    ; ONE signal so a triple isn't double-counted. Constraints on the 2D
+    ; forms: an x-pair needs a cm/mm unit, so matrix sizes ("256 x 512") and
+    ; dosages ("2 x 20 mg") don't trigger it; bare comma PAIRS are excluded
+    ; entirely ("May 3, 2026", "images 10, 12" would false-positive on
+    ; ordinary prose).
     m["SortNoduleSizes"] := [
-        ["\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?", 2, "three dimensions"],
+        ["\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?(?:\s*x\s*\d+(?:\.\d+)?|\s*(?:cm|mm)\b)", 2, "x-separated dimensions"],
         ["\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?", 2, "comma-separated sizes"]]
 
     ; ---- prostate ----
